@@ -1,0 +1,349 @@
+:root {
+  --bg: #f4f1ea;
+  --fg: #222;
+  --muted: #777;
+  --accent: #2f6fdb;
+  --card-back: #3b3f58;
+  --card-face: #fffdf7;
+  --ok: #2e9e5b;
+  --ng: #d64545;
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.big {
+  font-size: 1.1rem;
+  padding: 10px 24px;
+  margin-top: 12px;
+}
+button.small {
+  padding: 2px 8px;
+  font-size: 0.85rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 12px 16px 48px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.banner {
+  background: #fde68a;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.toast {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ng);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  z-index: 10;
+}
+
+.notice {
+  background: #e8eefc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+/* 入室 */
+.entry {
+  max-width: 360px;
+  margin: 10vh auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.entry h1 {
+  text-align: center;
+}
+.entry label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entry-row {
+  display: flex;
+  gap: 8px;
+}
+.code-input {
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.entry-or {
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ルーム */
+.room-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.code {
+  font-size: 1.4rem;
+  letter-spacing: 0.15em;
+  margin: 0 8px;
+}
+.players {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.player {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.player.me {
+  border-color: var(--accent);
+  font-weight: bold;
+}
+.player.away {
+  opacity: 0.4;
+}
+
+.topic {
+  margin: 16px 0 8px;
+  padding: 12px 16px;
+  background: #fff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.topic-text {
+  font-size: 1.4rem;
+  font-weight: bold;
+  flex: 1;
+}
+.mode-tag {
+  background: var(--card-back);
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.my-numbers {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 1.1rem;
+}
+.my-numbers strong {
+  font-size: 1.6rem;
+  margin-left: 12px;
+}
+
+.lobby {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+}
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.field-row input {
+  flex: 1;
+  min-width: 200px;
+}
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.board h3 {
+  margin: 20px 0 8px;
+}
+.field,
+.hand,
+.free-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+.hands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.other-name {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+/* カード */
+.card {
+  width: 130px;
+  min-height: 170px;
+  border-radius: 10px;
+  border: 2px solid #999;
+  background: var(--card-face);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+.card.closed {
+  background: var(--card-back);
+  color: #fff;
+  border-color: var(--card-back);
+}
+.card.mine {
+  border-color: var(--accent);
+}
+.card.ok {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok);
+}
+.card.ng,
+.card.miss {
+  border-color: var(--ng);
+  box-shadow: 0 0 0 3px var(--ng);
+}
+.card-inner {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+.card-owner {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+.card-value {
+  font-size: 2.2rem;
+  font-weight: bold;
+  text-align: center;
+}
+.card.closed .card-value {
+  opacity: 0.3;
+}
+.card-hint {
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+textarea.card-hint {
+  resize: none;
+  height: 3.6em;
+  width: 100%;
+}
+.card.closed .muted {
+  color: #bbb;
+}
+.card-verdict {
+  text-align: center;
+  font-weight: bold;
+}
+.card.ok .card-verdict {
+  color: var(--ok);
+}
+.card.ng .card-verdict,
+.card.miss .card-verdict {
+  color: var(--ng);
+}
+
+/* 自由配置 */
+.row-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: grab;
+}
+.slot.dragging {
+  opacity: 0.4;
+}
+.slot-arrows {
+  display: flex;
+  gap: 4px;
+}
+.flip {
+  animation: flip 0.6s ease-out;
+}
+@keyframes flip {
+  0% {
+    transform: perspective(600px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(600px) rotateY(0deg);
+  }
+}
+
+.result {
+  margin-top: 24px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
