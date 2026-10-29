@@ -82,6 +82,8 @@ export class Room {
       if (name) existing.name = name;
       return existing;
     }
+    // 席が外れた古い token で新しい席を作らない。クライアントはセッションを捨てて入り直す
+    if (token) throw new GameError('席が見つかりません。もう一度入室してください');
     if (!name) throw new GameError('ニックネームを入力してください');
     if (this.players.length >= LIMITS.maxPlayers) this.pruneAway();
     if (this.players.length >= LIMITS.maxPlayers) throw new GameError('ルームが満員です');

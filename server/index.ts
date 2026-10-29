@@ -91,7 +91,7 @@ function withRoom(socket: GameSocket, fn: (room: Room, playerId: string, payload
     const ack: Ack = typeof last === 'function' ? (last as Ack) : () => {};
     const first = args[0];
     const payload: Payload = first && typeof first === 'object' ? (first as Payload) : {};
-    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const { code, playerId } = socket.data;
     const room = code ? rooms.get(code) : undefined;
     if (!room || !playerId) return ack({ ok: false, error: 'ルームに入っていません' });
@@ -145,7 +145,7 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 io.on('connection', (socket: GameSocket) => {
   socket.on('create', (p: { name?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
-    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
     if (rooms.size >= MAX_ROOMS) return ack({ ok: false, error: 'ルーム数が上限です。既存のルームに入ってください' });
@@ -162,7 +162,7 @@ io.on('connection', (socket: GameSocket) => {
 
   socket.on('join', (p: { code?: unknown; name?: unknown; token?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
-    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const code = cleanText(p?.code, 4).toUpperCase();
     const room = rooms.get(code);
     if (!room) return ack({ ok: false, error: 'ルームが見つかりません' });
@@ -174,7 +174,8 @@ io.on('connection', (socket: GameSocket) => {
     const room = code ? rooms.get(code) : undefined;
     socket.data.code = undefined;
     socket.data.playerId = undefined;
-    if (room && playerId) {
+    // 同じ席の別タブが残っていれば席はそのまま
+    if (room && playerId && !isPlayerOnline(room.code, playerId)) {
       room.leave(playerId);
       broadcast(room);
     }

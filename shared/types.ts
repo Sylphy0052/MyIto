@@ -52,5 +52,6 @@ export interface RoomView {
 
 export type AckResult =
   | { ok: true; code?: string; token?: string }
-  | { ok: false; error: string; timeout?: boolean };
+  /** retry: 一時的な失敗 (タイムアウト、レート制限)。セッションを残して再試行してよい */
+  | { ok: false; error: string; retry?: boolean };
 export type Ack = (res: AckResult) => void;

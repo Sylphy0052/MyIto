@@ -17,15 +17,18 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let isRejoining = false;
     const rejoin = async () => {
       setConnected(true);
       const s = loadSession();
-      if (!s) return;
+      if (!s || isRejoining) return;
+      isRejoining = true;
       const res = await send('join', { code: s.code, name: s.name, token: s.token });
+      isRejoining = false;
       if (res.ok) return;
       showError(res.error);
-      // タイムアウトはセッションを残して再試行し、サーバが断ったとき (ルームが無い等) だけ捨てる
-      if (res.timeout) {
+      // 一時的な失敗はセッションを残して再試行し、サーバが断ったとき (ルームや席が無い) だけ捨てる
+      if (res.retry) {
         if (socket.connected) window.setTimeout(() => void rejoin(), 3000);
       } else {
         clearSession();

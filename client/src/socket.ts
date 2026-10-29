@@ -6,7 +6,7 @@ export const socket = io();
 export function send(event: string, payload: object = {}): Promise<AckResult> {
   return new Promise((resolve) => {
     socket.timeout(10_000).emit(event, payload, (err: Error | null, res: AckResult) => {
-      resolve(err ? { ok: false, error: '通信がタイムアウトしました', timeout: true } : res);
+      resolve(err ? { ok: false, error: '通信がタイムアウトしました', retry: true } : res);
     });
   });
 }

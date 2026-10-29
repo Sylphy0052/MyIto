@@ -91,6 +91,7 @@ export function generateTopic(genre: string): Promise<string> {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (err && child.exitCode === null) child.kill('SIGKILL');
       if (err) reject(err);
       else resolve(topic!);
     };
