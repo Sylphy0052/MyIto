@@ -71,16 +71,35 @@ function normalizeTopic(output: string): string | null {
 
 /** claude -p でお題を1つ作る。失敗したら Error を投げる */
 export function generateTopic(genre: string): Promise<string> {
+  // サブスクリプション認証 (claude setup-token) を優先し、無ければ API キーを使う
+  const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return Promise.reject(new Error('ANTHROPIC_API_KEY is not set'));
+  if (!oauthToken && !apiKey) {
+    return Promise.reject(new Error('CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY is not set'));
+  }
+  const authEnv = oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : { ANTHROPIC_API_KEY: apiKey! };
 
   return new Promise((resolve, reject) => {
+    // --bare は OAuth トークンを読まないので使わない。代わりに設定・skill・MCP・ツールをすべて切る
     const child = spawn(
       'claude',
-      ['-p', '--bare', '--tools', '', '--strict-mcp-config', '--output-format', 'text', '--model', 'sonnet'],
+      [
+        '-p',
+        '--setting-sources',
+        '',
+        '--disable-slash-commands',
+        '--strict-mcp-config',
+        '--tools',
+        '',
+        '--output-format',
+        'text',
+        '--model',
+        'sonnet',
+      ],
       {
         cwd: workDir,
-        env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? workDir, ANTHROPIC_API_KEY: apiKey },
+        // HOME も空の作業ディレクトリにして、ユーザー設定や CLAUDE.md を拾わない
+        env: { PATH: process.env.PATH ?? '', HOME: workDir, ...authEnv },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );
