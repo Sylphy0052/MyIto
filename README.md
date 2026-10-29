@@ -24,6 +24,8 @@ npm run build && npm start   # http://localhost:47213
 ## デプロイ
 
 ```sh
-# ANTHROPIC_API_KEY=... を書いた .env を compose.yaml と同じディレクトリに置く (任意。無ければAI生成は内蔵リストへフォールバック)
+# AIお題を使うなら、手元で `claude setup-token` を実行してトークンを作り、
+# CLAUDE_CODE_OAUTH_TOKEN=... を書いた .env を compose.yaml と同じディレクトリに置く
+# (任意。無ければAI生成は内蔵リストへフォールバック。ANTHROPIC_API_KEY でも動く)
 docker compose up -d --build
 ```

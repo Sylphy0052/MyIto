@@ -5,5 +5,7 @@ services:
       - "47213:47213"
     environment:
       # 同じディレクトリの .env から読む。repo には入れない
+      # CLAUDE_CODE_OAUTH_TOKEN は `claude setup-token` で作るサブスクリプション認証のトークン
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     restart: unless-stopped
