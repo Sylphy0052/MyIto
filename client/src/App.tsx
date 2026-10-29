@@ -17,19 +17,21 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    let isRejoining = false;
+    // 新しい rejoin を始めたら、古い join の結果と再試行タイマーは捨てる
+    let generation = 0;
+    let retryTimer: number | undefined;
     const rejoin = async () => {
       setConnected(true);
+      window.clearTimeout(retryTimer);
       const s = loadSession();
-      if (!s || isRejoining) return;
-      isRejoining = true;
+      if (!s) return;
+      const current = ++generation;
       const res = await send('join', { code: s.code, name: s.name, token: s.token });
-      isRejoining = false;
-      if (res.ok) return;
+      if (current !== generation || res.ok) return;
       showError(res.error);
       // 一時的な失敗はセッションを残して再試行し、サーバが断ったとき (ルームや席が無い) だけ捨てる
       if (res.retry) {
-        if (socket.connected) window.setTimeout(() => void rejoin(), 3000);
+        if (socket.connected) retryTimer = window.setTimeout(() => void rejoin(), 3000);
       } else {
         clearSession();
         setView(null);
@@ -41,6 +43,8 @@ export function App() {
     socket.on('state', setView);
     if (socket.connected) void rejoin();
     return () => {
+      generation += 1;
+      window.clearTimeout(retryTimer);
       socket.off('connect', rejoin);
       socket.off('disconnect', onDisconnect);
       socket.off('state', setView);
