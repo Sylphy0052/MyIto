@@ -13,21 +13,46 @@ const PORT = Number(process.env.PORT ?? 47213);
 const REVEAL_INTERVAL_MS = 1_200;
 const HOST_GRACE_MS = 30_000;
 const ROOM_IDLE_MS = 60 * 60_000;
+const MAX_ROOMS = 200;
+const EVENTS_PER_SECOND = 20;
 
 const rooms = new Map<string, Room>();
 
 const app = express();
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'client');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
+  );
+  next();
+});
 if (existsSync(clientDir)) {
   app.use(express.static(clientDir));
   app.get('/{*path}', (_req, res) => res.sendFile(join(clientDir, 'index.html')));
 }
 const httpServer = createServer(app);
-const io = new Server(httpServer, { maxHttpBufferSize: 16 * 1024 });
+const io = new Server(httpServer, {
+  maxHttpBufferSize: 16 * 1024,
+  // 他サイトのページからの接続を断る
+  allowRequest: (req, callback) => {
+    const origin = req.headers.origin;
+    if (!origin) return callback(null, true);
+    try {
+      callback(null, new URL(origin).host === req.headers.host);
+    } catch {
+      callback(null, false);
+    }
+  },
+});
 
 interface SocketData {
   code?: string;
   playerId?: string;
+  windowStart?: number;
+  windowCount?: number;
 }
 type GameSocket = Socket<any, any, any, SocketData>;
 
@@ -48,6 +73,17 @@ function errorMessage(e: unknown): string {
 
 type Payload = Record<string, unknown>;
 
+/** 1ソケットあたり1秒に EVENTS_PER_SECOND 回を超えたら true */
+function isFlooding(socket: GameSocket): boolean {
+  const now = Date.now();
+  if (!socket.data.windowStart || now - socket.data.windowStart >= 1000) {
+    socket.data.windowStart = now;
+    socket.data.windowCount = 0;
+  }
+  socket.data.windowCount = (socket.data.windowCount ?? 0) + 1;
+  return socket.data.windowCount > EVENTS_PER_SECOND;
+}
+
 /** 入室済みソケットの操作を、例外を ack へ変換して実行する */
 function withRoom(socket: GameSocket, fn: (room: Room, playerId: string, payload: Payload) => void) {
   return (...args: unknown[]) => {
@@ -55,6 +91,7 @@ function withRoom(socket: GameSocket, fn: (room: Room, playerId: string, payload
     const ack: Ack = typeof last === 'function' ? (last as Ack) : () => {};
     const first = args[0];
     const payload: Payload = first && typeof first === 'object' ? (first as Payload) : {};
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
     const { code, playerId } = socket.data;
     const room = code ? rooms.get(code) : undefined;
     if (!room || !playerId) return ack({ ok: false, error: 'ルームに入っていません' });
@@ -68,12 +105,30 @@ function withRoom(socket: GameSocket, fn: (room: Room, playerId: string, payload
   };
 }
 
-function enter(socket: GameSocket, room: Room, name: string, playerId: unknown, ack: Ack): void {
+/** ソケットがいま入っているルームから抜ける (同じ席の別ソケットが残っていれば接続中のまま) */
+function detach(socket: GameSocket): void {
+  const { code, playerId } = socket.data;
+  socket.data.code = undefined;
+  socket.data.playerId = undefined;
+  const room = code ? rooms.get(code) : undefined;
+  if (!room || !playerId || isPlayerOnline(room.code, playerId)) return;
+  room.setConnected(playerId, false);
+  broadcast(room);
+  if (playerId === room.hostId) {
+    setTimeout(() => {
+      if (rooms.get(room.code) === room && room.reassignHostIfAway()) broadcast(room);
+    }, HOST_GRACE_MS + 1_000);
+  }
+}
+
+function enter(socket: GameSocket, room: Room, name: string, token: unknown, ack: Ack): void {
   try {
-    const player = room.join(name, typeof playerId === 'string' ? playerId : undefined);
+    const player = room.join(name, typeof token === 'string' ? token : undefined);
+    if (socket.data.code !== room.code || socket.data.playerId !== player.id) detach(socket);
     socket.data.code = room.code;
     socket.data.playerId = player.id;
-    ack({ ok: true, code: room.code, playerId: player.id });
+    room.reassignHostIfAway();
+    ack({ ok: true, code: room.code, token: player.token });
     broadcast(room);
   } catch (e) {
     ack({ ok: false, error: errorMessage(e) });
@@ -88,21 +143,42 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 }
 
 io.on('connection', (socket: GameSocket) => {
-  socket.on('create', (p: { name?: unknown; playerId?: unknown }, ack: Ack) => {
+  socket.on('create', (p: { name?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
-    const room = new Room(newRoomCode(rooms));
+    if (rooms.size >= MAX_ROOMS) return ack({ ok: false, error: 'ルーム数が上限です。既存のルームに入ってください' });
+    let code: string;
+    try {
+      code = newRoomCode(rooms);
+    } catch (e) {
+      return ack({ ok: false, error: errorMessage(e) });
+    }
+    const room = new Room(code);
     rooms.set(room.code, room);
     enter(socket, room, name, undefined, ack);
   });
 
-  socket.on('join', (p: { code?: unknown; name?: unknown; playerId?: unknown }, ack: Ack) => {
+  socket.on('join', (p: { code?: unknown; name?: unknown; token?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
+    if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください' });
     const code = cleanText(p?.code, 4).toUpperCase();
     const room = rooms.get(code);
     if (!room) return ack({ ok: false, error: 'ルームが見つかりません' });
-    enter(socket, room, cleanText(p?.name, LIMITS.name), p?.playerId, ack);
+    enter(socket, room, cleanText(p?.name, LIMITS.name), p?.token, ack);
+  });
+
+  socket.on('leave', (_p: unknown, ack: Ack) => {
+    const { code, playerId } = socket.data;
+    const room = code ? rooms.get(code) : undefined;
+    socket.data.code = undefined;
+    socket.data.playerId = undefined;
+    if (room && playerId) {
+      room.leave(playerId);
+      broadcast(room);
+    }
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on(
@@ -123,7 +199,7 @@ io.on('connection', (socket: GameSocket) => {
       if (pid !== room.hostId) throw new GameError('ホストだけが操作できます');
       if (room.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
       if (room.aiBusy) throw new GameError('AIがお題を考え中です');
-      const limited = acquireAiSlot(room.code);
+      const limited = acquireAiSlot(room.code, socket.handshake.address);
       if (limited) throw new GameError(limited);
       room.aiBusy = true;
       room.notice = 'AIがお題を考えています...';
@@ -160,19 +236,7 @@ io.on('connection', (socket: GameSocket) => {
   );
   socket.on('lobby', withRoom(socket, (room, pid) => room.backToLobby(pid)));
 
-  socket.on('disconnect', () => {
-    const { code, playerId } = socket.data;
-    const room = code ? rooms.get(code) : undefined;
-    if (!room || !playerId) return;
-    if (isPlayerOnline(room.code, playerId)) return;
-    room.setConnected(playerId, false);
-    broadcast(room);
-    if (playerId === room.hostId) {
-      setTimeout(() => {
-        if (rooms.get(room.code) === room && room.reassignHostIfAway()) broadcast(room);
-      }, HOST_GRACE_MS);
-    }
-  });
+  socket.on('disconnect', () => detach(socket));
 });
 
 setInterval(() => {

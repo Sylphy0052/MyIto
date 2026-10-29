@@ -50,4 +50,7 @@ export interface RoomView {
   revealed: number;
 }
 
-export type Ack = (res: { ok: true; code?: string; playerId?: string } | { ok: false; error: string }) => void;
+export type AckResult =
+  | { ok: true; code?: string; token?: string }
+  | { ok: false; error: string; timeout?: boolean };
+export type Ack = (res: AckResult) => void;

@@ -11,6 +11,7 @@ const GLOBAL_MAX_CALLS = 10;
 const MAX_OUTPUT_CHARS = 2_000;
 
 const roomLastCall = new Map<string, number>();
+const ipLastCall = new Map<string, number>();
 let globalCalls: number[] = [];
 
 // claude を動かす作業ディレクトリ。ツールは無効だが、念のため空のディレクトリで動かす
@@ -25,9 +26,10 @@ export function sanitizeGenre(raw: unknown): string {
 }
 
 /** 制限に掛かるなら理由を返す。掛からなければ呼出を記録して null を返す */
-export function acquireAiSlot(roomCode: string, now = Date.now()): string | null {
-  const last = roomLastCall.get(roomCode);
-  if (last !== undefined && now - last < ROOM_INTERVAL_MS) {
+export function acquireAiSlot(roomCode: string, ip: string, now = Date.now()): string | null {
+  // ルームを作り直して全体の枠を使い切られないよう、接続元ごとにも同じ間隔を課す
+  const last = Math.max(roomLastCall.get(roomCode) ?? 0, ipLastCall.get(ip) ?? 0);
+  if (now - last < ROOM_INTERVAL_MS) {
     const wait = Math.ceil((ROOM_INTERVAL_MS - (now - last)) / 1000);
     return `AI生成はルームごとに30秒に1回までです (あと${wait}秒)`;
   }
@@ -36,6 +38,8 @@ export function acquireAiSlot(roomCode: string, now = Date.now()): string | null
     return 'AI生成の全体の上限 (1分に10回) に達しました';
   }
   roomLastCall.set(roomCode, now);
+  ipLastCall.set(ip, now);
+  for (const [k, t] of ipLastCall) if (now - t >= ROOM_INTERVAL_MS) ipLastCall.delete(k);
   globalCalls = [...globalCalls, now];
   return null;
 }
@@ -95,13 +99,17 @@ export function generateTopic(genre: string): Promise<string> {
       finish(new Error('claude timed out'));
     }, TIMEOUT_MS);
 
-    child.stdout.on('data', (d: Buffer) => {
-      if (stdout.length < MAX_OUTPUT_CHARS) stdout += d.toString('utf8');
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d: string) => {
+      if (stdout.length < MAX_OUTPUT_CHARS) stdout += d;
     });
-    child.stderr.on('data', (d: Buffer) => {
-      if (stderr.length < MAX_OUTPUT_CHARS) stderr += d.toString('utf8');
+    child.stderr.on('data', (d: string) => {
+      if (stderr.length < MAX_OUTPUT_CHARS) stderr += d;
     });
     child.on('error', (e) => finish(e));
+    // claude が起動できなかったときの EPIPE でプロセスを落とさない
+    child.stdin.on('error', (e) => finish(e));
     child.on('close', (code) => {
       if (code !== 0) return finish(new Error(`claude exited with ${code}: ${stderr.slice(0, 200)}`));
       const topic = normalizeTopic(stdout);

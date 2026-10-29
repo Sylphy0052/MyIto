@@ -1,7 +1,7 @@
 FROM node:22-slim
 
 # AIお題生成用。ツールは無効化して呼ぶ (server/ai.ts)
-RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+RUN npm install -g @anthropic-ai/claude-code@2.1.312 && npm cache clean --force
 
 WORKDIR /app
 COPY package.json package-lock.json ./

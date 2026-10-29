@@ -12,10 +12,16 @@ import { randomTopic } from './topics';
 const MAX_VALUE = 100;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
+const HOST_GRACE_MS = 30_000;
+
 interface Player {
+  /** 全員に配信する公開ID */
   id: string;
+  /** 再入室用の秘密。本人にだけ返し、配信しない */
+  token: string;
   name: string;
   connected: boolean;
+  awaySince: number | null;
 }
 
 interface Card {
@@ -68,35 +74,62 @@ export class Room {
 
   // ---- 参加 ----
 
-  join(name: string, playerId?: string): Player {
-    const existing = playerId ? this.players.find((p) => p.id === playerId) : undefined;
+  join(name: string, token?: string): Player {
+    const existing = token ? this.players.find((p) => p.token === token) : undefined;
     if (existing) {
       existing.connected = true;
+      existing.awaySince = null;
       if (name) existing.name = name;
       return existing;
     }
     if (!name) throw new GameError('ニックネームを入力してください');
+    if (this.players.length >= LIMITS.maxPlayers) this.pruneAway();
     if (this.players.length >= LIMITS.maxPlayers) throw new GameError('ルームが満員です');
-    const player: Player = { id: randomUUID(), name, connected: true };
+    const player: Player = { id: randomUUID(), token: randomUUID(), name, connected: true, awaySince: null };
     this.players.push(player);
-    if (!this.hostId) this.hostId = player.id;
+    if (!this.hostId || !this.players.some((p) => p.id === this.hostId)) this.hostId = player.id;
     return player;
+  }
+
+  /** 切断中で手札を持たないプレイヤーを席から外す (ホストは残す) */
+  private pruneAway(): void {
+    this.players = this.players.filter(
+      (p) => p.connected || p.id === this.hostId || this.cards.some((c) => c.ownerId === p.id),
+    );
   }
 
   setConnected(playerId: string, connected: boolean): void {
     const p = this.players.find((x) => x.id === playerId);
-    if (p) p.connected = connected;
+    if (!p) return;
+    p.connected = connected;
+    p.awaySince = connected ? null : Date.now();
   }
 
-  /** ホストが切断したままなら、接続中の別プレイヤーへホストを移す */
-  reassignHostIfAway(): boolean {
+  /** ホストが猶予を過ぎても切断したままなら、接続中の別プレイヤーへホストを移す */
+  reassignHostIfAway(now = Date.now()): boolean {
     const host = this.players.find((p) => p.id === this.hostId);
-    if (host?.connected) return false;
+    if (host && (host.connected || now - (host.awaySince ?? now) < HOST_GRACE_MS)) return false;
     const next = this.players.find((p) => p.connected);
     if (!next) return false;
     this.hostId = next.id;
     this.notice = `${next.name} さんがホストになりました`;
     return true;
+  }
+
+  /** 退室。手札を持っていなければ席を外し、持っていれば切断扱いにする */
+  leave(playerId: string): void {
+    const holdsCards = this.cards.some((c) => c.ownerId === playerId);
+    if (holdsCards) this.setConnected(playerId, false);
+    else this.players = this.players.filter((p) => p.id !== playerId);
+    if (playerId === this.hostId) {
+      const next = this.players.find((p) => p.connected && p.id !== playerId);
+      if (next) {
+        this.hostId = next.id;
+        this.notice = `${next.name} さんがホストになりました`;
+      } else if (!holdsCards) {
+        this.hostId = '';
+      }
+    }
   }
 
   hasConnected(): boolean {
@@ -277,8 +310,9 @@ export class Room {
 }
 
 export function newRoomCode(existing: ReadonlyMap<string, unknown>): string {
-  for (;;) {
+  for (let i = 0; i < 100; i++) {
     const code = Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
     if (!existing.has(code)) return code;
   }
+  throw new GameError('ルームを作れませんでした。もう一度試してください');
 }

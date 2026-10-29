@@ -21,11 +21,15 @@ export function App() {
       setConnected(true);
       const s = loadSession();
       if (!s) return;
-      const res = await send('join', { code: s.code, name: s.name, playerId: s.playerId });
-      if (!res.ok) {
+      const res = await send('join', { code: s.code, name: s.name, token: s.token });
+      if (res.ok) return;
+      showError(res.error);
+      // タイムアウトはセッションを残して再試行し、サーバが断ったとき (ルームが無い等) だけ捨てる
+      if (res.timeout) {
+        if (socket.connected) window.setTimeout(() => void rejoin(), 3000);
+      } else {
         clearSession();
         setView(null);
-        showError(res.error);
       }
     };
     const onDisconnect = () => setConnected(false);
@@ -43,13 +47,13 @@ export function App() {
   const enterRoom = async (name: string, code: string | null) => {
     const res = code ? await send('join', { code, name }) : await send('create', { name });
     if (!res.ok) return showError(res.error);
-    saveSession({ code: res.code!, playerId: res.playerId!, name });
+    saveSession({ code: res.code!, token: res.token!, name });
   };
 
-  const leave = () => {
+  const leave = async () => {
+    await send('leave');
     clearSession();
     setView(null);
-    socket.disconnect().connect();
   };
 
   /** ゲーム操作を送り、失敗したらエラーを表示する */

@@ -10,7 +10,7 @@ export type Act = (event: string, payload?: object) => Promise<void>;
 interface Props {
   view: RoomView;
   act: Act;
-  onLeave: () => void;
+  onLeave: () => Promise<void>;
 }
 
 const MODE_LABEL = { coop: '協力', free: '自由配置' } as const;
@@ -42,7 +42,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
             </span>
           ))}
         </div>
-        <button className="small" onClick={onLeave}>
+        <button className="small" onClick={() => void onLeave()}>
           退室
         </button>
       </header>
@@ -59,6 +59,10 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         <section className="my-numbers">
           あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
         </section>
+      )}
+
+      {view.phase !== 'lobby' && myCards.length === 0 && (
+        <div className="notice">観戦中です。次のラウンドから参加できます</div>
       )}
 
       {view.phase === 'lobby' && <Lobby view={view} isHost={isHost} act={act} />}
