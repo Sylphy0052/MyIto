@@ -1,0 +1,9 @@
+services:
+  ito:
+    build: .
+    ports:
+      - "47213:47213"
+    environment:
+      # 同じディレクトリの .env から読む。repo には入れない
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    restart: unless-stopped
