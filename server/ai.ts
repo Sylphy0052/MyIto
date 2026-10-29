@@ -48,6 +48,11 @@ export function forgetRoom(roomCode: string): void {
   roomLastCall.delete(roomCode);
 }
 
+/** ログに出す前に、トークンやキーらしき文字列を伏せる */
+function maskSecrets(text: string): string {
+  return text.replace(/sk-ant-[\w-]+/gi, '***');
+}
+
 function buildPrompt(genre: string): string {
   const genreLine = genre ? `ジャンル: 「${genre}」` : 'ジャンル: 指定なし (自由に)';
   return [
@@ -66,7 +71,9 @@ function normalizeTopic(output: string): string | null {
     .find((l) => l.length > 0);
   if (!line) return null;
   const topic = line.replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '').slice(0, LIMITS.topic);
-  return topic.length > 0 ? topic : null;
+  // タグや資格情報らしき文字列を含む出力はお題として配信しない
+  if (topic.length === 0 || /[<>]|sk-ant-/i.test(topic)) return null;
+  return topic;
 }
 
 /** claude -p でお題を1つ作る。失敗したら Error を投げる */
@@ -131,7 +138,7 @@ export function generateTopic(genre: string): Promise<string> {
     // claude が起動できなかったときの EPIPE でプロセスを落とさない
     child.stdin.on('error', (e) => finish(e));
     child.on('close', (code) => {
-      if (code !== 0) return finish(new Error(`claude exited with ${code}: ${stderr.slice(0, 200)}`));
+      if (code !== 0) return finish(new Error(`claude exited with ${code}: ${maskSecrets(stderr.slice(0, 200))}`));
       const topic = normalizeTopic(stdout);
       if (!topic) return finish(new Error('claude returned empty output'));
       finish(null, topic);
