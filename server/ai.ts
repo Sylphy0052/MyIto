@@ -2,16 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { LIMITS } from '../shared/types';
 
 const TIMEOUT_MS = 30_000;
-const ROOM_INTERVAL_MS = 30_000;
 const GLOBAL_WINDOW_MS = 60_000;
-const GLOBAL_MAX_CALLS = 10;
+const GLOBAL_MAX_CALLS = 30;
 const MAX_OUTPUT_CHARS = 2_000;
 // 改行の来ない1行をため続けないための上限
 const MAX_LINE_CHARS = 64_000;
 const MAX_ERROR_DETAIL_CHARS = 200;
 
-const roomLastCall = new Map<string, number>();
-const ipLastCall = new Map<string, number>();
 let globalCalls: number[] = [];
 
 // 社内の ASK API (NoteDock と同じ窓口)。キーと projectId が無ければ AI 生成は使わない。
@@ -31,26 +28,13 @@ export function sanitizeGenre(raw: unknown): string {
 }
 
 /** 制限に掛かるなら理由を返す。掛からなければ呼出を記録して null を返す */
-export function acquireAiSlot(roomCode: string, ip: string, now = Date.now()): string | null {
-  // ルームを作り直して全体の枠を使い切られないよう、接続元ごとにも同じ間隔を課す
-  const last = Math.max(roomLastCall.get(roomCode) ?? 0, ipLastCall.get(ip) ?? 0);
-  if (now - last < ROOM_INTERVAL_MS) {
-    const wait = Math.ceil((ROOM_INTERVAL_MS - (now - last)) / 1000);
-    return `AI生成はルームごとに30秒に1回までです (あと${wait}秒)`;
-  }
+export function acquireAiSlot(now = Date.now()): string | null {
   globalCalls = globalCalls.filter((t) => now - t < GLOBAL_WINDOW_MS);
   if (globalCalls.length >= GLOBAL_MAX_CALLS) {
-    return 'AI生成の全体の上限 (1分に10回) に達しました';
+    return `AI生成の全体の上限 (1分に${GLOBAL_MAX_CALLS}回) に達しました`;
   }
-  roomLastCall.set(roomCode, now);
-  ipLastCall.set(ip, now);
-  for (const [k, t] of ipLastCall) if (now - t >= ROOM_INTERVAL_MS) ipLastCall.delete(k);
   globalCalls = [...globalCalls, now];
   return null;
-}
-
-export function forgetRoom(roomCode: string): void {
-  roomLastCall.delete(roomCode);
 }
 
 // トークンやキーらしき文字列。Anthropic 形式 (sk-ant-) と、ASK のキーなど形式を問わず拾えるよう長い英数字の連なり
