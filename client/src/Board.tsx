@@ -69,9 +69,6 @@ function findInsertIndex(rowEl: HTMLElement, cardId: string, x: number, y: numbe
   return x < r.left + r.width / 2 ? best : best + 1;
 }
 
-/** ドロップした列のカードが、直後に戻ってくるまでの猶予 (ミリ秒)。この間は出現の演出を付けない */
-const SETTLE_WINDOW_MS = 1500;
-
 export function Board({ view, isHost, nameOf, act, onHint, isDealing }: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -79,8 +76,12 @@ export function Board({ view, isHost, nameOf, act, onHint, isDealing }: Props) {
   const handRef = useRef<HTMLDivElement>(null);
   // 開始直後に表示されたときだけ、手札を1枚ずつ配る (途中参加や再接続では動かさない)
   const shouldDeal = useRef(isDealing);
-  // ドラッグで外した列のカードは、ドロップ後に同じ key で付け直される。そのとき出現の演出を付けない
-  const settle = useRef<{ id: string; at: number } | null>(null);
+  // ドラッグで外した列のカードは、ドロップ直後の描画で同じ key で付け直される。そのとき出現の演出を付けない。
+  // 描画を1回挟めば不要になるので、描画後に必ず消す
+  const settle = useRef<string | null>(null);
+  useEffect(() => {
+    settle.current = null;
+  });
 
   const byId = new Map(view.cards.map((c) => [c.id, c]));
   const row = view.order.map((id) => byId.get(id)!).filter(Boolean);
@@ -148,11 +149,13 @@ export function Board({ view, isHost, nameOf, act, onHint, isDealing }: Props) {
       if (!d || e.pointerId !== d.pointerId) return;
       updateDrag(null);
       if (!d.isMoving) return;
-      if (d.from === 'row') settle.current = { id: d.cardId, at: Date.now() };
+      if (d.from === 'row') settle.current = d.cardId;
       const { byId: cards, you, act: send } = latest.current;
       if (d.insertAt !== null) {
         void send(d.from === 'hand' ? 'place' : 'move', { cardId: d.cardId, toIndex: d.insertAt });
       } else if (d.from === 'row' && d.isOverHand && cards.get(d.cardId)?.ownerId === you) {
+        // 手札へ戻すカードは、列に付け直されない
+        settle.current = null;
         void send('unplace', { cardId: d.cardId });
       }
     };
@@ -184,7 +187,7 @@ export function Board({ view, isHost, nameOf, act, onHint, isDealing }: Props) {
     .map((c) => {
       const i = row.indexOf(c);
       const isRevealed = i < revealedCount;
-      const isSettling = settle.current?.id === c.id && Date.now() - settle.current.at < SETTLE_WINDOW_MS;
+      const isSettling = settle.current === c.id;
       return (
         <m.div
           key={c.id}
