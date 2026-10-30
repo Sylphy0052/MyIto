@@ -80,6 +80,7 @@ export function Lobby({ view, isHost, act }: Props) {
             <li key={t}>
               <button
                 className={view.topicSource === 'ai' && view.topic === t ? 'selected' : undefined}
+                disabled={view.aiBusy}
                 onClick={() => act('topic:pick', { index: i })}
               >
                 {t}
