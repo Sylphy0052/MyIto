@@ -6,15 +6,19 @@ const ROOM_INTERVAL_MS = 30_000;
 const GLOBAL_WINDOW_MS = 60_000;
 const GLOBAL_MAX_CALLS = 10;
 const MAX_OUTPUT_CHARS = 2_000;
+// 改行の来ない1行をため続けないための上限
+const MAX_LINE_CHARS = 64_000;
+const MAX_ERROR_DETAIL_CHARS = 200;
 
 const roomLastCall = new Map<string, number>();
 const ipLastCall = new Map<string, number>();
 let globalCalls: number[] = [];
 
-// 社内の ASK API (NoteDock と同じ窓口)。キーと projectId が無ければ AI 生成は使わない
+// 社内の ASK API (NoteDock と同じ窓口)。キーと projectId が無ければ AI 生成は使わない。
+// compose は未設定の変数も空文字で渡すので、既定値は ?? ではなく || で当てる
 const ASK_API_URL = (process.env.ASK_API_URL || 'https://langchaindemo.heroz.jp').replace(/\/+$/, '');
-const ASK_API_KEY = process.env.ASK_API_KEY ?? '';
-const ASK_PROJECT_ID = Number(process.env.ASK_PROJECT_ID ?? '');
+const ASK_API_KEY = (process.env.ASK_API_KEY ?? '').trim();
+const ASK_PROJECT_ID = Number(process.env.ASK_PROJECT_ID || '');
 // Sonnet 系は thinking 版だけが通る (非 thinking 版は ASK 側のプロンプトキャッシュの不具合で失敗する)
 const ASK_MODEL = process.env.ASK_MODEL || 'claude-55-sonnet-thinking';
 
@@ -49,7 +53,7 @@ export function forgetRoom(roomCode: string): void {
   roomLastCall.delete(roomCode);
 }
 
-// トークンやキーらしき文字列。sk-ant- 形式と、形式が変わっても拾えるよう長い英数字の連なり
+// トークンやキーらしき文字列。Anthropic 形式 (sk-ant-) と、ASK のキーなど形式を問わず拾えるよう長い英数字の連なり
 const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/gi;
 // test 用。g 付きの正規表現を test に使うと lastIndex が残るので分ける
 const HAS_SECRET_LIKE = new RegExp(SECRET_LIKE.source, 'i');
@@ -59,8 +63,28 @@ function maskSecrets(text: string): string {
   return text.replace(SECRET_LIKE, '***');
 }
 
+/** キーを平文で送らないよう https だけを許す。手元の確認用に localhost だけは http も通す */
+function isSafeAskUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'https:') return true;
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function isAskConfigured(): boolean {
-  return ASK_API_KEY.length > 0 && Number.isInteger(ASK_PROJECT_ID) && ASK_PROJECT_ID > 0;
+  return (
+    ASK_API_KEY.length > 0 &&
+    Number.isInteger(ASK_PROJECT_ID) &&
+    ASK_PROJECT_ID > 0 &&
+    isSafeAskUrl(ASK_API_URL)
+  );
+}
+
+if (!isAskConfigured()) {
+  console.warn('ASK API is not configured (ASK_API_KEY, ASK_PROJECT_ID, ASK_API_URL). AI topics fall back to the built-in list');
 }
 
 // system prompt。ジャンルは userInput に分けて渡す
@@ -87,18 +111,29 @@ function normalizeTopic(output: string): string | null {
   return topic;
 }
 
-/** ASK API の応答 (1行1JSONのストリーム) から本文を組み立てる */
-async function readAnswer(body: ReadableStream<Uint8Array>): Promise<string> {
+interface Answer {
+  message: string;
+  /** JSON として読めなかった行の数。本文が空のときの原因の手掛かりにする */
+  skippedLines: number;
+}
+
+/**
+ * ASK API の応答 (1行1JSONのストリーム) から本文を組み立てる。
+ * ASK は終端を示すイベントを送らない (NoteDock も close まで読む) ので、close までに届いた分を本文とする
+ */
+async function readAnswer(body: ReadableStream<Uint8Array>): Promise<Answer> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let message = '';
+  let skippedLines = 0;
   const handleLine = (line: string) => {
     if (!line.trim()) return;
     let event: unknown;
     try {
       event = JSON.parse(line);
     } catch {
+      skippedLines += 1;
       return;
     }
     if (typeof event !== 'object' || event === null) return;
@@ -106,27 +141,50 @@ async function readAnswer(body: ReadableStream<Uint8Array>): Promise<string> {
     if (type === 'add_message_token' && typeof token === 'string') message += token;
     else if (type === 'replace_message' && typeof replaced === 'string') message = replaced;
   };
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    lines.forEach(handleLine);
-    // お題は1行で足りる。長すぎる応答は読み切らずに打ち切る
-    if (message.length > MAX_OUTPUT_CHARS) {
-      await reader.cancel();
-      return message;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      lines.forEach(handleLine);
+      if (buffer.length > MAX_LINE_CHARS) throw new Error('ASK API sent an oversized line');
+      // お題は1行で足りる。長すぎる応答は読み切らずに打ち切る
+      if (message.length > MAX_OUTPUT_CHARS) return { message, skippedLines };
     }
+    handleLine(buffer + decoder.decode());
+    return { message, skippedLines };
+  } finally {
+    // 打ち切り・例外のときも接続を残さない。読み終えた後の cancel は何もしない
+    reader.cancel().catch(() => {});
   }
-  handleLine(buffer + decoder.decode());
-  return message;
+}
+
+/** エラー応答の本文を先頭だけ読む。巨大な本文をメモリに載せない */
+async function readHead(body: ReadableStream<Uint8Array> | null, maxChars: number): Promise<string> {
+  if (!body) return '';
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (text.length < maxChars) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch {
+    // 本文はログの補足にすぎないので、読めた分だけ使う
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return text.slice(0, maxChars);
 }
 
 /** ASK API でお題を1つ作る。失敗したら Error を投げる */
 export async function generateTopic(genre: string): Promise<string> {
   if (!isAskConfigured()) {
-    throw new Error('ASK API is not configured (ASK_API_KEY, ASK_PROJECT_ID)');
+    throw new Error('ASK API is not configured (ASK_API_KEY, ASK_PROJECT_ID, ASK_API_URL)');
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -152,14 +210,18 @@ export async function generateTopic(genre: string): Promise<string> {
         useWebSearch: false,
         isFollowUp: false,
       }),
+      // キーを別の宛先へ送らないよう、リダイレクトには従わない
+      redirect: 'error',
       signal: controller.signal,
     });
-    if (!res.ok || !res.body) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail.slice(0, 200))}`);
+    if (!res.ok) {
+      const detail = await readHead(res.body, MAX_ERROR_DETAIL_CHARS);
+      throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail)}`);
     }
-    const topic = normalizeTopic(await readAnswer(res.body));
-    if (!topic) throw new Error('ASK API returned empty output');
+    if (!res.body) throw new Error('ASK API returned no body');
+    const { message, skippedLines } = await readAnswer(res.body);
+    const topic = normalizeTopic(message);
+    if (!topic) throw new Error(`ASK API returned no usable topic (unparsed lines: ${skippedLines})`);
     return topic;
   } catch (e) {
     if (controller.signal.aborted) throw new Error('ASK API timed out');
