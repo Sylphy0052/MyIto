@@ -162,7 +162,9 @@ export function generateTopics(genre: string): Promise<string[]> {
     child.on('close', (code) => {
       if (code !== 0) return finish(new Error(`claude exited with ${code}: ${maskSecrets(stderr.slice(0, 200))}`));
       // 上限で打ち切った出力は最終行が途中で切れているので捨てる
-      const body = stdout.length >= MAX_OUTPUT_CHARS ? stdout.slice(0, stdout.lastIndexOf('\n') + 1) : stdout;
+      // 改行が無ければ1行だけなので、normalizeTopic の文字数制限に任せる
+      const lastBreak = stdout.lastIndexOf('\n');
+      const body = stdout.length >= MAX_OUTPUT_CHARS && lastBreak >= 0 ? stdout.slice(0, lastBreak + 1) : stdout;
       const topics = normalizeTopics(body);
       if (topics.length === 0) return finish(new Error('claude returned empty output'));
       finish(null, topics);
