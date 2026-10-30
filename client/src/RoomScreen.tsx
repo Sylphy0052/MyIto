@@ -4,7 +4,35 @@ import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
 
-export type Act = (event: string, payload?: object) => Promise<void>;
+const COPIED_LABEL_MS = 2000;
+
+// navigator.clipboard は https か localhost でしか使えない。LANのIPをhttpで開いたときは execCommand に頼る
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // 権限で拒否されたときは下の方法を試す
+    }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+  }
+}
+
+export type Act =(event: string, payload?: object) => Promise<void>;
 
 interface Props {
   view: RoomView;
@@ -58,14 +86,25 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     };
   }, [isPerfect, flow.isJustFinished]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
+  const [isCopied, setIsCopied] = useState(false);
+  const copyInvite = async () => {
+    const isOk = await copyText(inviteUrl);
+    if (!isOk) {
+      // どの方法でもコピーできないときは、手で選んでコピーできるように出す
+      window.prompt('招待URL', inviteUrl);
+      return;
+    }
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), COPIED_LABEL_MS);
+  };
 
   return (
     <div className="room">
       <header className="room-header">
         <div>
           ルーム <strong className="code">{view.code}</strong>
-          <button className="small" onClick={() => navigator.clipboard?.writeText(inviteUrl)}>
-            招待URLをコピー
+          <button className="small" onClick={() => void copyInvite()}>
+            {isCopied ? 'コピーしました' : '招待URLをコピー'}
           </button>
         </div>
         <div className="players">
