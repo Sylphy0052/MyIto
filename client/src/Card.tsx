@@ -8,14 +8,12 @@ interface Props {
   /** 自分のカードで例えを書き換えられるとき */
   canEdit?: boolean;
   onHint?: (hint: string) => void;
-  /** 自由配置のめくり結果。true=正しい並び */
+  /** めくり結果。true=正しい並び */
   verdict?: boolean;
-  /** 協力モードでミスとして捨てたカード */
-  isMiss?: boolean;
   children?: ReactNode;
 }
 
-export function Card({ card, ownerName, isMine, canEdit, onHint, verdict, isMiss, children }: Props) {
+export function Card({ card, ownerName, isMine, canEdit, onHint, verdict, children }: Props) {
   const [draft, setDraft] = useState(card.hint);
   const onHintRef = useRef(onHint);
   onHintRef.current = onHint;
@@ -32,7 +30,7 @@ export function Card({ card, ownerName, isMine, canEdit, onHint, verdict, isMiss
   }, [draft, canEdit, card.hint]);
 
   const isOpen = card.value !== null;
-  const classes = ['card', isMine ? 'mine' : '', isOpen ? 'open' : 'closed', isMiss ? 'miss' : ''];
+  const classes = ['card', isMine ? 'mine' : '', isOpen ? 'open' : 'closed'];
   if (verdict !== undefined) classes.push(verdict ? 'ok' : 'ng');
 
   return (
@@ -52,7 +50,6 @@ export function Card({ card, ownerName, isMine, canEdit, onHint, verdict, isMiss
           <div className="card-hint">{card.hint || <span className="muted">(例えなし)</span>}</div>
         )}
         {verdict !== undefined && <div className="card-verdict">{verdict ? 'OK' : 'NG'}</div>}
-        {isMiss && <div className="card-verdict">ミス</div>}
         {children}
       </div>
     </div>

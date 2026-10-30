@@ -1,9 +1,7 @@
 import { useCallback } from 'react';
 import type { RoomView } from '../../shared/types';
-import { Card } from './Card';
 import { Lobby } from './Lobby';
-import { CoopBoard } from './CoopBoard';
-import { FreeBoard } from './FreeBoard';
+import { Board } from './Board';
 
 export type Act = (event: string, payload?: object) => Promise<void>;
 
@@ -13,8 +11,6 @@ interface Props {
   onLeave: () => Promise<void>;
 }
 
-const MODE_LABEL = { coop: '協力', free: '自由配置' } as const;
-
 export function RoomScreen({ view, act, onLeave }: Props) {
   const isHost = view.you === view.hostId;
   const nameOf = useCallback(
@@ -23,6 +19,11 @@ export function RoomScreen({ view, act, onLeave }: Props) {
   );
   const myCards = view.cards.filter((c) => c.ownerId === view.you);
   const onHint = useCallback((cardId: string, hint: string) => act('hint', { cardId, hint }), [act]);
+  const isPerfect = view.order.every((id, i) => {
+    if (i === 0) return true;
+    const value = (cid: string) => view.cards.find((c) => c.id === cid)?.value ?? 0;
+    return value(id) > value(view.order[i - 1]!);
+  });
   const inviteUrl = `${location.origin}/?room=${view.code}`;
 
   return (
@@ -50,7 +51,6 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       <section className="topic">
         <span className="label">お題</span>
         <span className="topic-text">{view.topic}</span>
-        {view.phase !== 'lobby' && <span className="mode-tag">{MODE_LABEL[view.mode]}</span>}
       </section>
 
       {view.notice && <div className="notice">{view.notice}</div>}
@@ -66,35 +66,11 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       )}
 
       {view.phase === 'lobby' && <Lobby view={view} isHost={isHost} act={act} />}
-      {view.phase !== 'lobby' && view.mode === 'coop' && (
-        <CoopBoard view={view} nameOf={nameOf} act={act} onHint={onHint} />
-      )}
-      {view.phase !== 'lobby' && view.mode === 'free' && (
-        <FreeBoard view={view} isHost={isHost} nameOf={nameOf} act={act} />
-      )}
-
-      {view.phase !== 'lobby' && view.mode === 'free' && myCards.length > 0 && (
-        <section>
-          <h3>自分のカード (例えを書く)</h3>
-          <div className="hand">
-            {myCards.map((c) => (
-              <Card
-                key={c.id}
-                card={c}
-                ownerName="あなた"
-                isMine
-                canEdit={view.phase === 'playing'}
-                onHint={(h) => onHint(c.id, h)}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      {view.phase !== 'lobby' && <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} />}
 
       {view.phase === 'result' && (
         <section className="result">
-          <h2>結果: ミス {view.misses} 回</h2>
-          <p>{view.misses === 0 ? 'パーフェクト!' : 'おつかれさまでした'}</p>
+          <h2>{isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}</h2>
           {isHost ? (
             <button className="primary" onClick={() => act('lobby')}>
               次のラウンドへ (ロビーに戻る)

@@ -1,6 +1,5 @@
-export type Mode = 'coop' | 'free';
 export type Phase = 'lobby' | 'playing' | 'revealing' | 'result';
-export type CardState = 'hand' | 'played' | 'discarded';
+export type CardState = 'hand' | 'placed';
 export type TopicSource = 'random' | 'custom' | 'ai' | 'ai-fallback';
 
 export const LIMITS = {
@@ -32,7 +31,6 @@ export interface RoomView {
   you: string;
   hostId: string;
   phase: Phase;
-  mode: Mode;
   cardsPerPlayer: number;
   topic: string;
   topicSource: TopicSource;
@@ -41,12 +39,9 @@ export interface RoomView {
   round: number;
   players: PlayerView[];
   cards: CardView[];
-  /** 協力モード: 場に出た順 (ミスで捨てたカードも含む) */
-  field: string[];
-  misses: number;
-  /** 自由配置モード: 列の並び (左が小さい側) */
+  /** 列に置いたカードの並び (左が小さい側) */
   order: string[];
-  /** 自由配置モード: 左からめくった枚数 */
+  /** 左からめくった枚数 */
   revealed: number;
 }
 

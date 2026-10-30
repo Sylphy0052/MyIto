@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import {
   LIMITS,
   type CardState,
-  type Mode,
   type Phase,
   type RoomView,
   type TopicSource,
@@ -52,7 +51,6 @@ export class Room {
   readonly code: string;
   hostId = '';
   phase: Phase = 'lobby';
-  mode: Mode = 'coop';
   cardsPerPlayer = 1;
   topic = randomTopic();
   topicSource: TopicSource = 'random';
@@ -61,8 +59,6 @@ export class Room {
   round = 0;
   players: Player[] = [];
   cards: Card[] = [];
-  field: string[] = [];
-  misses = 0;
   order: string[] = [];
   revealed = 0;
   lastActiveAt = Date.now();
@@ -144,10 +140,9 @@ export class Room {
 
   // ---- ロビー ----
 
-  setSettings(playerId: string, mode: unknown, cardsPerPlayer: unknown): void {
+  setSettings(playerId: string, cardsPerPlayer: unknown): void {
     this.requireHost(playerId);
     if (this.phase !== 'lobby') throw new GameError('ロビーでだけ変更できます');
-    if (mode === 'coop' || mode === 'free') this.mode = mode;
     const n = Number(cardsPerPlayer);
     if (Number.isInteger(n) && n >= 1 && n <= LIMITS.maxCardsPerPlayer) this.cardsPerPlayer = n;
   }
@@ -175,9 +170,7 @@ export class Room {
         .sort((a, b) => a - b)
         .map((value) => ({ id: randomUUID(), ownerId: p.id, value, hint: '', state: 'hand' as const })),
     );
-    this.field = [];
-    this.misses = 0;
-    this.order = this.mode === 'free' ? shuffle(this.cards.map((c) => c.id)) : [];
+    this.order = [];
     this.revealed = 0;
     this.round += 1;
     this.notice = '';
@@ -190,10 +183,8 @@ export class Room {
     this.stopReveal();
     this.phase = 'lobby';
     this.cards = [];
-    this.field = [];
     this.order = [];
     this.revealed = 0;
-    this.misses = 0;
     this.notice = '';
   }
 
@@ -206,35 +197,33 @@ export class Room {
   }
 
   setHint(playerId: string, cardId: unknown, hint: string): void {
-    if (this.phase === 'lobby') throw new GameError('ゲーム中だけ書き込めます');
+    if (this.phase !== 'playing') throw new GameError('めくり始める前だけ書き込めます');
     this.ownCard(playerId, cardId).hint = hint;
   }
 
-  /** 協力モード: カードを場に出す。より小さい手札が残っていればミスとして公開して捨てる */
-  play(playerId: string, cardId: unknown): void {
-    if (this.phase !== 'playing' || this.mode !== 'coop') throw new GameError('いまは出せません');
+  /** 自分の手札を列の toIndex の位置に置く */
+  place(playerId: string, cardId: unknown, toIndex: unknown): void {
+    if (this.phase !== 'playing') throw new GameError('いまは置けません');
     const card = this.ownCard(playerId, cardId);
-    if (card.state !== 'hand') throw new GameError('そのカードは出ています');
-
-    const skipped = this.cards
-      .filter((c) => c.state === 'hand' && c.id !== card.id && c.value < card.value)
-      .sort((a, b) => a.value - b.value);
-    for (const c of skipped) c.state = 'discarded';
-    card.state = 'played';
-    this.field = [...this.field, ...skipped.map((c) => c.id), card.id];
-    this.misses += skipped.length;
-
-    const player = this.players.find((p) => p.id === playerId);
-    this.notice =
-      skipped.length > 0
-        ? `${player?.name ?? '?'} さんの ${card.value} より小さいカードが${skipped.length}枚残っていました (ミス+${skipped.length})`
-        : '';
-    if (this.cards.every((c) => c.state !== 'hand')) this.phase = 'result';
+    if (card.state !== 'hand') throw new GameError('そのカードは置いてあります');
+    const to = Number(toIndex);
+    if (!Number.isInteger(to) || to < 0 || to > this.order.length) throw new GameError('置けない位置です');
+    card.state = 'placed';
+    this.order = [...this.order.slice(0, to), card.id, ...this.order.slice(to)];
   }
 
-  /** 自由配置モード: 列の中でカードを動かす。誰でも動かせる */
+  /** 列に置いた自分のカードを手札へ戻す */
+  unplace(playerId: string, cardId: unknown): void {
+    if (this.phase !== 'playing') throw new GameError('いまは戻せません');
+    const card = this.ownCard(playerId, cardId);
+    if (card.state !== 'placed') throw new GameError('そのカードは手札にあります');
+    card.state = 'hand';
+    this.order = this.order.filter((id) => id !== card.id);
+  }
+
+  /** 列の中でカードを動かす。誰でも動かせる */
   move(cardId: unknown, toIndex: unknown): void {
-    if (this.phase !== 'playing' || this.mode !== 'free') throw new GameError('いまは動かせません');
+    if (this.phase !== 'playing') throw new GameError('いまは動かせません');
     const from = this.order.indexOf(cardId as string);
     const to = Number(toIndex);
     if (from < 0 || !Number.isInteger(to) || to < 0 || to >= this.order.length) {
@@ -245,26 +234,21 @@ export class Room {
     this.order = next;
   }
 
-  /** 自由配置モード: 左から1枚ずつめくる。onStep は1枚めくるたびに呼ぶ */
+  /** 全員が置き終わったら、左から1枚ずつめくる。onStep は1枚めくるたびに呼ぶ */
   open(playerId: string, intervalMs: number, onStep: () => void): void {
     this.requireHost(playerId);
-    if (this.phase !== 'playing' || this.mode !== 'free') throw new GameError('いまはオープンできません');
+    if (this.phase !== 'playing') throw new GameError('いまはオープンできません');
+    if (this.cards.some((c) => c.state !== 'placed')) throw new GameError('全員のカードが置かれてからオープンしてください');
     this.phase = 'revealing';
     this.revealed = 0;
     this.revealTimer = setInterval(() => {
       this.revealed += 1;
       if (this.revealed >= this.order.length) {
         this.stopReveal();
-        this.misses = this.countFreeMisses();
         this.phase = 'result';
       }
       onStep();
     }, intervalMs);
-  }
-
-  private countFreeMisses(): number {
-    const values = this.order.map((id) => this.cards.find((c) => c.id === id)!.value);
-    return values.filter((v, i) => i > 0 && v < values[i - 1]!).length;
   }
 
   stopReveal(): void {
@@ -276,7 +260,6 @@ export class Room {
 
   private isRevealed(card: Card): boolean {
     if (this.phase === 'result') return true;
-    if (this.mode === 'coop') return card.state !== 'hand';
     const idx = this.order.indexOf(card.id);
     return idx >= 0 && idx < this.revealed;
   }
@@ -288,7 +271,6 @@ export class Room {
       you: viewerId,
       hostId: this.hostId,
       phase: this.phase,
-      mode: this.mode,
       cardsPerPlayer: this.cardsPerPlayer,
       topic: this.topic,
       topicSource: this.topicSource,
@@ -303,8 +285,6 @@ export class Room {
         hint: c.hint,
         state: c.state,
       })),
-      field: this.field,
-      misses: this.misses,
       order: this.order,
       revealed: this.revealed,
     };

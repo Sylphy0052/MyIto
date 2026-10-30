@@ -184,7 +184,7 @@ io.on('connection', (socket: GameSocket) => {
 
   socket.on(
     'settings',
-    withRoom(socket, (room, pid, p) => room.setSettings(pid, p.mode, p.cardsPerPlayer)),
+    withRoom(socket, (room, pid, p) => room.setSettings(pid, p.cardsPerPlayer)),
   );
   socket.on(
     'topic:random',
@@ -229,7 +229,8 @@ io.on('connection', (socket: GameSocket) => {
     'hint',
     withRoom(socket, (room, pid, p) => room.setHint(pid, p.cardId, cleanText(p.hint, LIMITS.hint))),
   );
-  socket.on('play', withRoom(socket, (room, pid, p) => room.play(pid, p.cardId)));
+  socket.on('place', withRoom(socket, (room, pid, p) => room.place(pid, p.cardId, p.toIndex)));
+  socket.on('unplace', withRoom(socket, (room, pid, p) => room.unplace(pid, p.cardId)));
   socket.on('move', withRoom(socket, (room, _pid, p) => room.move(p.cardId, p.toIndex)));
   socket.on(
     'open',

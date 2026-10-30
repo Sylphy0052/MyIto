@@ -172,13 +172,6 @@ textarea {
   font-weight: bold;
   flex: 1;
 }
-.mode-tag {
-  background: var(--card-back);
-  color: #fff;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-}
 
 .my-numbers {
   position: sticky;
@@ -307,7 +300,7 @@ textarea.card-hint {
   color: var(--ng);
 }
 
-/* 自由配置 */
+/* 列 */
 .row-labels {
   display: flex;
   justify-content: space-between;
@@ -346,4 +339,40 @@ textarea.card-hint {
   border-radius: 8px;
   padding: 16px;
   text-align: center;
+}
+
+/* ドラッグ */
+.slot.draggable {
+  touch-action: none;
+  user-select: none;
+}
+.slot.draggable textarea {
+  touch-action: auto;
+}
+.slot.dragging {
+  opacity: 0.3;
+}
+.drop-marker {
+  width: 6px;
+  min-height: 170px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.free-row {
+  min-height: 190px;
+  padding: 8px;
+  border: 2px dashed transparent;
+  border-radius: 10px;
+}
+.free-row.drop-active,
+.hand.drop-active {
+  border-color: var(--accent);
+  background: rgba(47, 111, 219, 0.06);
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: rotate(3deg);
 }
