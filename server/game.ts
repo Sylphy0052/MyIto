@@ -175,6 +175,7 @@ export class Room {
   start(playerId: string): void {
     this.requireHost(playerId);
     if (this.phase !== 'lobby') throw new GameError('すでに始まっています');
+    if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     const seated = this.players.filter((p) => p.connected);
     if (seated.length < 2) throw new GameError('2人以上で始めてください');
     const total = seated.length * this.cardsPerPlayer;
