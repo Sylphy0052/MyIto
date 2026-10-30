@@ -10,6 +10,8 @@ interface Props {
   nameOf: (id: string) => string;
   act: Act;
   onHint: (cardId: string, hint: string) => void;
+  /** ロビーから開始した直後か。true のときだけ手札を1枚ずつ配る */
+  isDealing: boolean;
 }
 
 interface Drag {
@@ -67,13 +69,18 @@ function findInsertIndex(rowEl: HTMLElement, cardId: string, x: number, y: numbe
   return x < r.left + r.width / 2 ? best : best + 1;
 }
 
-export function Board({ view, isHost, nameOf, act, onHint }: Props) {
+/** ドロップした列のカードが、直後に戻ってくるまでの猶予 (ミリ秒)。この間は出現の演出を付けない */
+const SETTLE_WINDOW_MS = 1500;
+
+export function Board({ view, isHost, nameOf, act, onHint, isDealing }: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const handRef = useRef<HTMLDivElement>(null);
   // 開始直後に表示されたときだけ、手札を1枚ずつ配る (途中参加や再接続では動かさない)
-  const shouldDeal = useRef(view.phase === 'playing' && view.cards.every((c) => c.state === 'hand'));
+  const shouldDeal = useRef(isDealing);
+  // ドラッグで外した列のカードは、ドロップ後に同じ key で付け直される。そのとき出現の演出を付けない
+  const settle = useRef<{ id: string; at: number } | null>(null);
 
   const byId = new Map(view.cards.map((c) => [c.id, c]));
   const row = view.order.map((id) => byId.get(id)!).filter(Boolean);
@@ -141,6 +148,7 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
       if (!d || e.pointerId !== d.pointerId) return;
       updateDrag(null);
       if (!d.isMoving) return;
+      if (d.from === 'row') settle.current = { id: d.cardId, at: Date.now() };
       const { byId: cards, you, act: send } = latest.current;
       if (d.insertAt !== null) {
         void send(d.from === 'hand' ? 'place' : 'move', { cardId: d.cardId, toIndex: d.insertAt });
@@ -176,12 +184,14 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
     .map((c) => {
       const i = row.indexOf(c);
       const isRevealed = i < revealedCount;
+      const isSettling = settle.current?.id === c.id && Date.now() - settle.current.at < SETTLE_WINDOW_MS;
       return (
         <m.div
           key={c.id}
-          layout="position"
+          // ドラッグ中は動かさない。動いている最中の位置で挿入位置を測ると、判定が揺れる
+          layout={movingId ? false : 'position'}
           transition={LAYOUT_TRANSITION}
-          initial={{ opacity: 0, scale: 1.12 }}
+          initial={isSettling ? false : { opacity: 0, scale: 1.12 }}
           animate={{ opacity: 1, scale: 1 }}
           data-slot={c.id}
           className={`slot ${isPlaying ? 'draggable' : ''}`}

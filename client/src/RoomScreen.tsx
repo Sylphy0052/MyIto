@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from 'motion/react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
@@ -25,21 +25,38 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     const values = new Map(view.cards.map((c) => [c.id, c.value ?? 0]));
     return view.order.every((id, i) => i === 0 || values.get(id)! > values.get(view.order[i - 1]!)!);
   }, [view.phase, view.cards, view.order]);
+  // 配りと紙吹雪は、その場で段階が進んだときだけ演出する。リロード・再接続・途中参加では出さない
+  const [flow, setFlow] = useState({ phase: view.phase, isDealing: false, isJustFinished: false });
+  if (flow.phase !== view.phase) {
+    setFlow({
+      phase: view.phase,
+      isDealing: flow.phase === 'lobby' && view.phase === 'playing',
+      // playing → revealing → result と進むので、直前の phase は問わない
+      isJustFinished: view.phase === 'result',
+    });
+  }
   // 全部正しい順番のときだけ紙吹雪を出す。読み込みは必要になってから
   useEffect(() => {
-    if (!isPerfect) return;
+    if (!isPerfect || !flow.isJustFinished) return;
     let isCancelled = false;
-    void import('canvas-confetti').then(({ default: confetti }) => {
-      if (isCancelled) return;
-      const burst = (originX: number, angle: number) =>
-        confetti({ particleCount: 90, spread: 70, angle, origin: { x: originX, y: 0.7 }, disableForReducedMotion: true });
-      burst(0.1, 60);
-      burst(0.9, 120);
-    });
+    let reset: (() => void) | undefined;
+    import('canvas-confetti')
+      .then(({ default: confetti }) => {
+        if (isCancelled) return;
+        reset = confetti.reset;
+        const burst = (originX: number, angle: number) =>
+          confetti({ particleCount: 90, spread: 70, angle, origin: { x: originX, y: 0.7 }, disableForReducedMotion: true });
+        burst(0.1, 60);
+        burst(0.9, 120);
+      })
+      .catch(() => {
+        // 紙吹雪は飾り。読み込みに失敗しても、ゲームの進行は止めない
+      });
     return () => {
       isCancelled = true;
+      reset?.();
     };
-  }, [isPerfect]);
+  }, [isPerfect, flow.isJustFinished]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
 
   return (
@@ -73,11 +90,10 @@ export function RoomScreen({ view, act, onLeave }: Props) {
 
       {view.phase !== 'lobby' && myCards.length > 0 && (
         <m.section
-          key={view.phase === 'playing' ? 'dealt' : 'shown'}
           className="my-numbers"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: view.phase === 'playing' ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
+          transition={{ delay: flow.isDealing ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
         >
           あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
         </m.section>
@@ -93,7 +109,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         </m.div>
       ) : (
         <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} />
+          <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} />
         </m.div>
       )}
 
