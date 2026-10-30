@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomView } from '../../shared/types';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
 import { RoomScreen } from './RoomScreen';
@@ -14,10 +14,13 @@ const BACKDROP_CARDS = [
   { left: '80%', size: 68, duration: 35, delay: -15 },
   { left: '92%', size: 40, duration: 24, delay: -11 },
 ];
+// トランプに近いカードの縦横比
+const CARD_ASPECT = 1.4;
 
 function Backdrop() {
   return (
     <div className="backdrop" aria-hidden="true">
+      {/* BACKDROP_CARDSは固定配列で、leftはカードごとに重ならないのでkeyに使う */}
       {BACKDROP_CARDS.map((c) => (
         <span
           key={c.left}
@@ -25,7 +28,7 @@ function Backdrop() {
           style={{
             left: c.left,
             width: c.size,
-            height: c.size * 1.4,
+            height: c.size * CARD_ASPECT,
             animationDuration: `${c.duration}s`,
             animationDelay: `${c.delay}s`,
           }}
@@ -35,14 +38,23 @@ function Backdrop() {
   );
 }
 
+// 画面の切り替えで退場中の画面は、見えている間も操作できないようにする (二重の入室や離席後の操作を防ぐ)
+function ScreenPanel(props: HTMLMotionProps<'div'>) {
+  const isPresent = useIsPresent();
+  return <m.div {...props} inert={!isPresent} />;
+}
+
 export function App() {
   const [view, setView] = useState<RoomView | null>(null);
   const [error, setError] = useState('');
+  // 同じ文言のエラーが続いてもトーストを出し直すための連番
+  const [errorSeq, setErrorSeq] = useState(0);
   const [connected, setConnected] = useState(socket.connected);
   const errorTimer = useRef<number | undefined>(undefined);
 
   const showError = useCallback((msg: string) => {
     setError(msg);
+    setErrorSeq((n) => n + 1);
     window.clearTimeout(errorTimer.current);
     errorTimer.current = window.setTimeout(() => setError(''), 4000);
   }, []);
@@ -122,9 +134,10 @@ export function App() {
       <AnimatePresence>
         {error && (
           <m.div
-            key={error}
+            key={errorSeq}
             className="toast"
             role="alert"
+            // .toastはCSSのtranslateX(-50%)で中央に置いている。motionがtransformを上書きするので、xに同じ-50%を渡し、その周りで左右に揺らす
             initial={{ opacity: 0, y: -24, x: '-50%', scale: 0.9 }}
             animate={{ opacity: 1, y: 0, x: ['-50%', '-52%', '-48%', '-50%'], scale: 1 }}
             exit={{ opacity: 0, y: -24, x: '-50%' }}
@@ -136,13 +149,13 @@ export function App() {
       </AnimatePresence>
       <AnimatePresence mode="wait">
         {view ? (
-          <m.div key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <ScreenPanel key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <RoomScreen view={view} act={act} onLeave={leave} />
-          </m.div>
+          </ScreenPanel>
         ) : (
-          <m.div key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
+          <ScreenPanel key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
             <Entry onEnter={enterRoom} />
-          </m.div>
+          </ScreenPanel>
         )}
       </AnimatePresence>
     </div>

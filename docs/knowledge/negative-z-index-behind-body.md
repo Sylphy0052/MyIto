@@ -1,6 +1,6 @@
 ---
 name: negative-z-index-behind-body
-description: z-index -1の背景演出がbodyの背景に隠れる。親に isolation: isolate を付ける
+description: z-index -1の背景演出がbodyの背景に隠れる。親に`isolation: isolate`を付ける
 updated: 2026-10-30
 ---
 

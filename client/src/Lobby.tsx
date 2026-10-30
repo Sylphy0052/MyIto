@@ -16,30 +16,45 @@ const SOURCE_LABEL = {
   'ai-fallback': '内蔵リスト (AI失敗)',
 } as const;
 
-const rows: Variants = {
+const rowsVariants: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.06 } },
 };
-const row: Variants = {
+const rowVariants: Variants = {
   hidden: { opacity: 0, x: -16 },
   show: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 26 } },
 };
 
+// AIの候補はめくるように1つずつ出す
+const candidatesVariants: Variants = {
+  show: { transition: { staggerChildren: 0.08 } },
+};
+const candidateVariants: Variants = {
+  hidden: { opacity: 0, y: 16, rotateX: -60 },
+  show: { opacity: 1, y: 0, rotateX: 0, transition: { type: 'spring', stiffness: 260, damping: 20 } },
+};
+// ゲストの待機画面で波打つ裏向きカード
+const WAITING_CARD_COUNT = 3;
+const WAITING_TILT_DEG = 10;
+
 /** 人数が変わるたびに跳ねる数字 */
 function Count({ value }: { value: number }) {
   return (
-    <AnimatePresence mode="popLayout" initial={false}>
-      <m.strong
-        key={value}
-        className="count"
-        initial={{ opacity: 0, y: -12, scale: 1.4 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 12 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-      >
-        {value}
-      </m.strong>
-    </AnimatePresence>
+    // popLayoutは退場する数字をabsoluteにするので、位置の基準になる箱で包む
+    <span className="count-box">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <m.strong
+          key={value}
+          className="count"
+          initial={{ opacity: 0, y: -12, scale: 1.4 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+        >
+          {value}
+        </m.strong>
+      </AnimatePresence>
+    </span>
   );
 }
 
@@ -51,21 +66,25 @@ export function Lobby({ view, isHost, act }: Props) {
 
   if (!isHost) {
     return (
-      <m.section className="lobby lobby-waiting" variants={rows} initial="hidden" animate="show">
-        <m.div className="waiting-cards" variants={row} aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <m.span
-              key={i}
-              className="waiting-card"
-              animate={{ y: [0, -10, 0], rotate: [(i - 1) * 10, (i - 1) * 14, (i - 1) * 10] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.18 }}
-            />
-          ))}
+      <m.section className="lobby lobby-waiting" variants={rowsVariants} initial="hidden" animate="show">
+        <m.div className="waiting-cards" variants={rowVariants} aria-hidden="true">
+          {Array.from({ length: WAITING_CARD_COUNT }, (_, i) => {
+            // 中央のカードを0度にして、左右に扇状に傾ける
+            const tilt = (i - 1) * WAITING_TILT_DEG;
+            return (
+              <m.span
+                key={i}
+                className="waiting-card"
+                animate={{ y: [0, -10, 0], rotate: [tilt, tilt * 1.4, tilt] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.18 }}
+              />
+            );
+          })}
         </m.div>
-        <m.p variants={row}>
+        <m.p variants={rowVariants}>
           1人 {view.cardsPerPlayer} 枚 / お題: {SOURCE_LABEL[view.topicSource]}
         </m.p>
-        <m.p className="muted" variants={row}>
+        <m.p className="muted" variants={rowVariants}>
           ホストが開始するのを待っています
           <span className="dots" aria-hidden="true">
             <span>.</span>
@@ -80,8 +99,8 @@ export function Lobby({ view, isHost, act }: Props) {
   }
 
   return (
-    <m.section className="lobby" variants={rows} initial="hidden" animate="show">
-      <m.div className="field-row" variants={row}>
+    <m.section className="lobby" variants={rowsVariants} initial="hidden" animate="show">
+      <m.div className="field-row" variants={rowVariants}>
         <span className="label">1人あたりの枚数</span>
         <select
           value={view.cardsPerPlayer}
@@ -95,7 +114,7 @@ export function Lobby({ view, isHost, act }: Props) {
         </select>
       </m.div>
 
-      <m.div className="field-row" variants={row}>
+      <m.div className="field-row" variants={rowVariants}>
         <span className="label">お題 ({SOURCE_LABEL[view.topicSource]})</span>
         <m.button
           disabled={view.aiBusy}
@@ -106,7 +125,7 @@ export function Lobby({ view, isHost, act }: Props) {
           ランダム
         </m.button>
       </m.div>
-      <m.div className="field-row" variants={row}>
+      <m.div className="field-row" variants={rowVariants}>
         <input
           placeholder="お題を自由入力"
           value={customTopic}
@@ -117,7 +136,7 @@ export function Lobby({ view, isHost, act }: Props) {
           決定
         </button>
       </m.div>
-      <m.div className="field-row" variants={row}>
+      <m.div className="field-row" variants={rowVariants}>
         <input
           placeholder={`AI: ジャンル (${LIMITS.genre}文字まで、空でも可)`}
           value={genre}
@@ -139,17 +158,14 @@ export function Lobby({ view, isHost, act }: Props) {
           className="topic-candidates"
           initial="hidden"
           animate="show"
-          variants={{ show: { transition: { staggerChildren: 0.08 } } }}
+          variants={candidatesVariants}
         >
           {view.topicCandidates.map((t, i) => {
             const isSelected = view.topicSource === 'ai' && view.topic === t;
             return (
               <m.li
                 key={t}
-                variants={{
-                  hidden: { opacity: 0, y: 16, rotateX: -60 },
-                  show: { opacity: 1, y: 0, rotateX: 0, transition: { type: 'spring', stiffness: 260, damping: 20 } },
-                }}
+                variants={candidateVariants}
               >
                 <m.button
                   className={isSelected ? 'selected' : undefined}
@@ -167,9 +183,9 @@ export function Lobby({ view, isHost, act }: Props) {
         </m.ul>
       )}
 
-      <m.div variants={row}>
+      <m.div variants={rowVariants}>
         <m.button
-          className={`primary big shine ${canStart ? 'ready' : ''}`}
+          className={canStart ? 'primary big shine ready' : 'primary big shine'}
           disabled={!canStart}
           whileTap={{ scale: 0.95 }}
           onClick={() => act('start')}

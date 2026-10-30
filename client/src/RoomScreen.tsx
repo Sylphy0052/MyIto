@@ -5,6 +5,8 @@ import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
 
 const COPIED_LABEL_MS = 2000;
+// お知らせが消えるとき、余白ごと畳んで下の要素を詰める
+const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
 // navigator.clipboard は https か localhost でしか使えない。LANのIPをhttpで開いたときは execCommand に頼る
 async function copyText(text: string): Promise<boolean> {
@@ -97,6 +99,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     const timer = setTimeout(() => setCopiedAt(0), COPIED_LABEL_MS);
     return () => clearTimeout(timer);
   }, [copiedAt]);
+  const isCopied = copiedAt !== 0;
   const copyInvite = async () => {
     const isOk = await copyText(inviteUrl);
     if (!isOk) {
@@ -118,6 +121,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         <div>
           ルーム{' '}
           <strong className="code">
+            {/* ルームコードは入室中に変わらないので、位置をkeyにしてよい */}
             {[...view.code].map((ch, i) => (
               <m.span
                 key={i}
@@ -130,17 +134,17 @@ export function RoomScreen({ view, act, onLeave }: Props) {
               </m.span>
             ))}
           </strong>
-          <button className={`small copy-button ${copiedAt !== 0 ? 'copied' : ''}`} onClick={() => void copyInvite()}>
+          <button className={`small copy-button ${isCopied ? 'copied' : ''}`} onClick={() => void copyInvite()}>
             <AnimatePresence mode="wait" initial={false}>
               <m.span
-                key={copiedAt !== 0 ? 'done' : 'idle'}
+                key={isCopied ? 'done' : 'idle'}
                 className="copy-label"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.15 }}
               >
-                {copiedAt !== 0 ? 'コピーしました' : '招待URLをコピー'}
+                {isCopied ? 'コピーしました' : '招待URLをコピー'}
               </m.span>
             </AnimatePresence>
           </button>
@@ -191,7 +195,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
             className="notice"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 }}
+            exit={NOTICE_COLLAPSE}
           >
             {view.notice}
           </m.div>

@@ -743,6 +743,10 @@ button.primary.ready::after {
 }
 
 /* ロビー */
+.count-box {
+  position: relative;
+  display: inline-block;
+}
 .count {
   display: inline-block;
 }
