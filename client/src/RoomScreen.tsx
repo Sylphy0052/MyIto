@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { m } from 'motion/react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
@@ -90,9 +90,13 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     };
   }, [isPerfect, flow.isJustFinished]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
-  const [isCopied, setIsCopied] = useState(false);
-  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(copiedTimer.current), []);
+  // 最後にコピーできた時刻。0 なら表示を戻す。連打したときは最後に押してから数える
+  const [copiedAt, setCopiedAt] = useState(0);
+  useEffect(() => {
+    if (copiedAt === 0) return;
+    const timer = setTimeout(() => setCopiedAt(0), COPIED_LABEL_MS);
+    return () => clearTimeout(timer);
+  }, [copiedAt]);
   const copyInvite = async () => {
     const isOk = await copyText(inviteUrl);
     if (!isOk) {
@@ -100,10 +104,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       window.prompt('招待URL', inviteUrl);
       return;
     }
-    setIsCopied(true);
-    // 連打したときは、最後に押してから数える
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => setIsCopied(false), COPIED_LABEL_MS);
+    setCopiedAt(Date.now());
   };
 
   return (
@@ -112,7 +113,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         <div>
           ルーム <strong className="code">{view.code}</strong>
           <button className="small" onClick={() => void copyInvite()}>
-            {isCopied ? 'コピーしました' : '招待URLをコピー'}
+            {copiedAt !== 0 ? 'コピーしました' : '招待URLをコピー'}
           </button>
         </div>
         <div className="players">
