@@ -60,6 +60,7 @@ export class Room {
   cardsPerPlayer = 1;
   topic = randomTopic();
   topicSource: TopicSource = 'random';
+  topicCandidates: string[] = [];
   aiBusy = false;
   notice = '';
   round = 0;
@@ -156,14 +157,25 @@ export class Room {
   setTopic(playerId: string, topic: string, source: TopicSource): void {
     this.requireHost(playerId);
     if (this.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
+    // 生成中に決めたお題は生成完了時に上書きされるので受け付けない
+    if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     if (!topic) throw new GameError('お題を入力してください');
     this.topic = topic;
     this.topicSource = source;
+    // 候補から選んだとき以外は、古い候補を残さない
+    if (source !== 'ai') this.topicCandidates = [];
+  }
+
+  pickCandidate(playerId: string, index: unknown): void {
+    const topic = Number.isInteger(index) ? this.topicCandidates[index as number] : undefined;
+    if (topic === undefined) throw new GameError('候補が見つかりません');
+    this.setTopic(playerId, topic, 'ai');
   }
 
   start(playerId: string): void {
     this.requireHost(playerId);
     if (this.phase !== 'lobby') throw new GameError('すでに始まっています');
+    if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     const seated = this.players.filter((p) => p.connected);
     if (seated.length < 2) throw new GameError('2人以上で始めてください');
     const total = seated.length * this.cardsPerPlayer;
@@ -287,6 +299,7 @@ export class Room {
       cardsPerPlayer: this.cardsPerPlayer,
       topic: this.topic,
       topicSource: this.topicSource,
+      topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
       notice: this.notice,
       round: this.round,

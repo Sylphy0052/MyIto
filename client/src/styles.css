@@ -329,6 +329,23 @@ textarea::placeholder {
   flex: 1;
   min-width: 200px;
 }
+.topic-candidates {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--sp-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-2);
+}
+.topic-candidates button {
+  width: 100%;
+  text-align: left;
+}
+.topic-candidates button.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 25%, var(--surface-2));
+  font-weight: 700;
+}
 .board h3 {
   margin: var(--sp-5) 0 var(--sp-2);
   font-size: var(--fs-lg);

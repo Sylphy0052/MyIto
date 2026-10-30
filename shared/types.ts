@@ -7,6 +7,7 @@ export const LIMITS = {
   hint: 40,
   topic: 60,
   genre: 20,
+  aiCandidates: 10,
   maxPlayers: 14,
   maxCardsPerPlayer: 5,
 } as const;
@@ -34,6 +35,8 @@ export interface RoomView {
   cardsPerPlayer: number;
   topic: string;
   topicSource: TopicSource;
+  /** 直近のAI生成で出たお題の候補。ホストがここから選ぶ */
+  topicCandidates: string[];
   aiBusy: boolean;
   notice: string;
   round: number;
