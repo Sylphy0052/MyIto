@@ -71,9 +71,23 @@ export function Lobby({ view, isHost, act }: Props) {
           onChange={(e) => setGenre(e.target.value)}
         />
         <button disabled={view.aiBusy} onClick={() => act('topic:ai', { genre })}>
-          {view.aiBusy ? '生成中...' : 'AIで生成'}
+          {view.aiBusy ? '生成中...' : `AIで${LIMITS.aiCandidates}案生成`}
         </button>
       </div>
+      {view.topicCandidates.length > 0 && (
+        <ul className="topic-candidates">
+          {view.topicCandidates.map((t, i) => (
+            <li key={t}>
+              <button
+                className={view.topicSource === 'ai' && view.topic === t ? 'selected' : undefined}
+                onClick={() => act('topic:pick', { index: i })}
+              >
+                {t}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <button className="primary big" disabled={seated < 2 || view.aiBusy} onClick={() => act('start')}>
         配って開始 ({seated}人)

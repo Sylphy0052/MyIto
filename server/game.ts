@@ -60,6 +60,7 @@ export class Room {
   cardsPerPlayer = 1;
   topic = randomTopic();
   topicSource: TopicSource = 'random';
+  topicCandidates: string[] = [];
   aiBusy = false;
   notice = '';
   round = 0;
@@ -159,6 +160,12 @@ export class Room {
     if (!topic) throw new GameError('お題を入力してください');
     this.topic = topic;
     this.topicSource = source;
+  }
+
+  pickCandidate(playerId: string, index: unknown): void {
+    const topic = Number.isInteger(index) ? this.topicCandidates[index as number] : undefined;
+    if (topic === undefined) throw new GameError('候補が見つかりません');
+    this.setTopic(playerId, topic, 'ai');
   }
 
   start(playerId: string): void {
@@ -287,6 +294,7 @@ export class Room {
       cardsPerPlayer: this.cardsPerPlayer,
       topic: this.topic,
       topicSource: this.topicSource,
+      topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
       notice: this.notice,
       round: this.round,

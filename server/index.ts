@@ -7,7 +7,7 @@ import { Server, type Socket } from 'socket.io';
 import { LIMITS, type Ack } from '../shared/types';
 import { GameError, Room, cleanText, newRoomCode } from './game';
 import { randomTopic } from './topics';
-import { acquireAiSlot, forgetRoom, generateTopic, sanitizeGenre } from './ai';
+import { acquireAiSlot, forgetRoom, generateTopics, sanitizeGenre } from './ai';
 
 const PORT = Number(process.env.PORT ?? 47213);
 const REVEAL_INTERVAL_MS = 1_200;
@@ -204,10 +204,11 @@ io.on('connection', (socket: GameSocket) => {
       if (limited) throw new GameError(limited);
       room.aiBusy = true;
       room.notice = 'AIがお題を考えています...';
-      generateTopic(sanitizeGenre(p.genre))
-        .then((topic) => {
+      generateTopics(sanitizeGenre(p.genre))
+        .then((topics) => {
           if (room.phase !== 'lobby') return;
-          room.topic = topic;
+          room.topicCandidates = topics;
+          room.topic = topics[0]!;
           room.topicSource = 'ai';
           room.notice = '';
         })
@@ -223,6 +224,10 @@ io.on('connection', (socket: GameSocket) => {
           broadcast(room);
         });
     }),
+  );
+  socket.on(
+    'topic:pick',
+    withRoom(socket, (room, pid, p) => room.pickCandidate(pid, p.index)),
   );
   socket.on('start', withRoom(socket, (room, pid) => room.start(pid)));
   socket.on(

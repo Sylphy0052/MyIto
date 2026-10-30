@@ -204,6 +204,23 @@ textarea {
   flex: 1;
   min-width: 200px;
 }
+.topic-candidates {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+}
+.topic-candidates button {
+  width: 100%;
+  text-align: left;
+}
+.topic-candidates button.selected {
+  border-color: var(--accent);
+  background: #e8f0fd;
+  font-weight: bold;
+}
 .board h3 {
   margin: 20px 0 8px;
 }
