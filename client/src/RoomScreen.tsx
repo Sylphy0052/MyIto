@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { m } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
 
 const COPIED_LABEL_MS = 2000;
+// お知らせが消えるとき、余白ごと畳んで下の要素を詰める
+const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
 // navigator.clipboard は https か localhost でしか使えない。LANのIPをhttpで開いたときは execCommand に頼る
 async function copyText(text: string): Promise<boolean> {
@@ -97,6 +99,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     const timer = setTimeout(() => setCopiedAt(0), COPIED_LABEL_MS);
     return () => clearTimeout(timer);
   }, [copiedAt]);
+  const isCopied = copiedAt !== 0;
   const copyInvite = async () => {
     const isOk = await copyText(inviteUrl);
     if (!isOk) {
@@ -109,32 +112,95 @@ export function RoomScreen({ view, act, onLeave }: Props) {
 
   return (
     <div className="room">
-      <header className="room-header">
+      <m.header
+        className="room-header"
+        initial={{ opacity: 0, y: -16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 24 }}
+      >
         <div>
-          ルーム <strong className="code">{view.code}</strong>
-          <button className="small" onClick={() => void copyInvite()}>
-            {copiedAt !== 0 ? 'コピーしました' : '招待URLをコピー'}
+          ルーム{' '}
+          <strong className="code">
+            {/* ルームコードは入室中に変わらないので、位置をkeyにしてよい */}
+            {[...view.code].map((ch, i) => (
+              <m.span
+                key={i}
+                className="code-char"
+                initial={{ opacity: 0, rotateX: -90 }}
+                animate={{ opacity: 1, rotateX: 0 }}
+                transition={{ delay: 0.15 + i * 0.07, type: 'spring', stiffness: 300, damping: 18 }}
+              >
+                {ch}
+              </m.span>
+            ))}
+          </strong>
+          <button className={`small copy-button ${isCopied ? 'copied' : ''}`} onClick={() => void copyInvite()}>
+            <AnimatePresence mode="wait" initial={false}>
+              <m.span
+                key={isCopied ? 'done' : 'idle'}
+                className="copy-label"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+              >
+                {isCopied ? 'コピーしました' : '招待URLをコピー'}
+              </m.span>
+            </AnimatePresence>
           </button>
         </div>
         <div className="players">
-          {view.players.map((p) => (
-            <span key={p.id} className={`player ${p.connected ? '' : 'away'} ${p.id === view.you ? 'me' : ''}`}>
-              {p.id === view.hostId && '★'}
-              {p.name}
-            </span>
-          ))}
+          <AnimatePresence initial={false}>
+            {view.players.map((p) => (
+              <m.span
+                key={p.id}
+                layout
+                className={`player ${p.connected ? '' : 'away'} ${p.id === view.you ? 'me' : ''}`}
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: p.connected ? 1 : 0.6, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.4 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+              >
+                {p.id === view.hostId && <span className="host-star">★</span>}
+                {p.name}
+              </m.span>
+            ))}
+          </AnimatePresence>
         </div>
         <button className="small" onClick={() => void onLeave()}>
           退室
         </button>
-      </header>
+      </m.header>
 
       <section className="topic">
         <span className="label">お題</span>
-        <span className="topic-text">{view.topic}</span>
+        <AnimatePresence mode="wait" initial={false}>
+          <m.span
+            key={view.topic}
+            className="topic-text"
+            initial={{ opacity: 0, y: 14, filter: 'blur(6px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -14, filter: 'blur(6px)' }}
+            transition={{ duration: 0.25 }}
+          >
+            {view.topic}
+          </m.span>
+        </AnimatePresence>
       </section>
 
-      {view.notice && <div className="notice">{view.notice}</div>}
+      <AnimatePresence>
+        {view.notice && (
+          <m.div
+            key={view.notice}
+            className="notice"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={NOTICE_COLLAPSE}
+          >
+            {view.notice}
+          </m.div>
+        )}
+      </AnimatePresence>
 
       {view.phase !== 'lobby' && myCards.length > 0 && (
         <m.section
@@ -168,7 +234,14 @@ export function RoomScreen({ view, act, onLeave }: Props) {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 200, damping: 20 }}
         >
-          <h2>{isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}</h2>
+          <m.h2
+            className={isPerfect ? 'perfect' : undefined}
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.15, type: 'spring', stiffness: 320, damping: 12 }}
+          >
+            {isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}
+          </m.h2>
           {isHost ? (
             <button className="primary" onClick={() => act('lobby')}>
               次のラウンドへ (ロビーに戻る)

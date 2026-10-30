@@ -1,17 +1,60 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomView } from '../../shared/types';
+import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
 import { RoomScreen } from './RoomScreen';
 
+// 背景にゆっくり漂うカードの影。位置・大きさ・周期は固定値で、描画ごとに変わらないようにする
+const BACKDROP_CARDS = [
+  { left: '6%', size: 64, duration: 26, delay: 0 },
+  { left: '22%', size: 44, duration: 32, delay: -8 },
+  { left: '41%', size: 72, duration: 38, delay: -20 },
+  { left: '63%', size: 52, duration: 29, delay: -4 },
+  { left: '80%', size: 68, duration: 35, delay: -15 },
+  { left: '92%', size: 40, duration: 24, delay: -11 },
+];
+// トランプに近いカードの縦横比
+const CARD_ASPECT = 1.4;
+
+function Backdrop() {
+  return (
+    <div className="backdrop" aria-hidden="true">
+      {/* BACKDROP_CARDSは固定配列で、leftはカードごとに重ならないのでkeyに使う */}
+      {BACKDROP_CARDS.map((c) => (
+        <span
+          key={c.left}
+          className="backdrop-card"
+          style={{
+            left: c.left,
+            width: c.size,
+            height: c.size * CARD_ASPECT,
+            animationDuration: `${c.duration}s`,
+            animationDelay: `${c.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// 画面の切り替えで退場中の画面は、見えている間も操作できないようにする (二重の入室や離席後の操作を防ぐ)
+function ScreenPanel(props: HTMLMotionProps<'div'>) {
+  const isPresent = useIsPresent();
+  return <m.div {...props} inert={!isPresent} />;
+}
+
 export function App() {
   const [view, setView] = useState<RoomView | null>(null);
   const [error, setError] = useState('');
+  // 同じ文言のエラーが続いてもトーストを出し直すための連番
+  const [errorSeq, setErrorSeq] = useState(0);
   const [connected, setConnected] = useState(socket.connected);
   const errorTimer = useRef<number | undefined>(undefined);
 
   const showError = useCallback((msg: string) => {
     setError(msg);
+    setErrorSeq((n) => n + 1);
     window.clearTimeout(errorTimer.current);
     errorTimer.current = window.setTimeout(() => setError(''), 4000);
   }, []);
@@ -74,9 +117,47 @@ export function App() {
 
   return (
     <div className="app">
-      {!connected && <div className="banner">サーバに再接続しています...</div>}
-      {error && <div className="toast">{error}</div>}
-      {view ? <RoomScreen view={view} act={act} onLeave={leave} /> : <Entry onEnter={enterRoom} />}
+      <Backdrop />
+      <AnimatePresence>
+        {!connected && (
+          <m.div
+            key="banner"
+            className="banner"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            サーバに再接続しています...
+          </m.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {error && (
+          <m.div
+            key={errorSeq}
+            className="toast"
+            role="alert"
+            // .toastはCSSのtranslateX(-50%)で中央に置いている。motionがtransformを上書きするので、xに同じ-50%を渡し、その周りで左右に揺らす
+            initial={{ opacity: 0, y: -24, x: '-50%', scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, x: ['-50%', '-52%', '-48%', '-50%'], scale: 1 }}
+            exit={{ opacity: 0, y: -24, x: '-50%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24, x: { duration: 0.3, delay: 0.15 } }}
+          >
+            {error}
+          </m.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence mode="wait">
+        {view ? (
+          <ScreenPanel key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <RoomScreen view={view} act={act} onLeave={leave} />
+          </ScreenPanel>
+        ) : (
+          <ScreenPanel key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
+            <Entry onEnter={enterRoom} />
+          </ScreenPanel>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

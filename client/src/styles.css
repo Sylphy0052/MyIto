@@ -146,6 +146,8 @@ textarea::placeholder {
   max-width: 1100px;
   margin: 0 auto;
   padding: var(--sp-4) var(--sp-4) 48px;
+  /* 背景のカード (z-index: -1) を body の背景より手前に描く */
+  isolation: isolate;
 }
 
 .muted {
@@ -598,8 +600,235 @@ textarea.card-hint::placeholder {
   }
 }
 
+/* 背景を漂うカード */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.backdrop-card {
+  position: absolute;
+  bottom: -160px;
+  border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 35%, transparent), transparent 80%);
+  opacity: 0.4;
+  animation: drift linear infinite;
+}
+@keyframes drift {
+  from {
+    transform: translateY(0) rotate(-10deg);
+  }
+  to {
+    transform: translateY(-130vh) rotate(25deg);
+  }
+}
+
+/* 主要ボタンを横切る光 */
+button.shine {
+  position: relative;
+  overflow: hidden;
+}
+button.shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+button.shine:hover:not(:disabled)::after {
+  animation: shine-sweep 0.8s ease-out;
+}
+button.primary.ready {
+  animation: ready-pulse 1.8s ease-in-out infinite;
+}
+button.primary.ready::after {
+  animation: shine-sweep 2.6s ease-in-out 1s infinite;
+}
+@keyframes shine-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+@keyframes ready-pulse {
+  0%,
+  100% {
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 4px 28px color-mix(in srgb, var(--accent) 70%, transparent),
+      0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+}
+
+/* 入室画面の飾り */
+.entry {
+  position: relative;
+}
+.entry-deco {
+  position: relative;
+  height: 64px;
+  margin: calc(var(--sp-2) * -1) 0 0;
+}
+.entry-deco-card {
+  position: absolute;
+  top: 8px;
+  width: 36px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: linear-gradient(160deg, var(--card-face), var(--card-face-2));
+  color: var(--card-ink);
+  font-weight: 800;
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-sm);
+}
+.entry-title-char {
+  display: inline-block;
+  background: linear-gradient(90deg, #8aa4ff, #d3a6ff, #8aa4ff);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: title-flow 4s linear infinite;
+}
+@keyframes title-flow {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ルーム見出し */
+.code {
+  perspective: 400px;
+}
+.code-char {
+  display: inline-block;
+}
+.copy-button {
+  margin-left: var(--sp-1);
+}
+.copy-button.copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.copy-label {
+  display: inline-block;
+}
+.player {
+  display: inline-block;
+}
+.host-star {
+  display: inline-block;
+  color: var(--warn);
+  margin-right: 2px;
+  animation: star-twinkle 2.4s ease-in-out infinite;
+}
+@keyframes star-twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0);
+  }
+  50% {
+    transform: scale(1.25) rotate(20deg);
+  }
+}
+.topic {
+  overflow: hidden;
+}
+
+/* ロビー */
+.count-box {
+  position: relative;
+  display: inline-block;
+}
+.count {
+  display: inline-block;
+}
+.lobby-waiting {
+  text-align: center;
+}
+.waiting-cards {
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 64px;
+  align-items: flex-end;
+}
+.waiting-card {
+  width: 34px;
+  height: 48px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: repeating-linear-gradient(45deg, var(--card-back), var(--card-back) 6px, var(--card-back-2) 6px, var(--card-back-2) 12px);
+  box-shadow: var(--shadow-sm);
+}
+.dots span {
+  display: inline-block;
+  animation: dot-bounce 1.2s ease-in-out infinite;
+}
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes dot-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-5px);
+  }
+}
+.topic-candidates {
+  perspective: 600px;
+}
+button.ai-busy {
+  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--accent) 40%, var(--surface-2)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: busy-shimmer 1.2s linear infinite;
+  opacity: 0.85;
+}
+@keyframes busy-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* 結果 */
+.result h2.perfect {
+  background: linear-gradient(90deg, var(--warn), #ffb4e6, var(--accent), var(--warn));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: title-flow 3s linear infinite;
+}
+
 /* 視差効果を減らす設定では、移動と回転をやめて不透明度だけで見せる */
 @media (prefers-reduced-motion: reduce) {
+  .backdrop {
+    display: none;
+  }
+  .entry-title-char,
+  .result h2.perfect,
+  .host-star,
+  .dots span,
+  button.ai-busy,
+  button.primary.ready,
+  button.shine::after,
+  button.shine:hover:not(:disabled)::after,
+  button.primary.ready::after {
+    animation: none;
+  }
   button {
     transition: none;
   }
