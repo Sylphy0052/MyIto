@@ -83,13 +83,16 @@ export class Room {
       existing.connected = true;
       existing.awaySince = null;
       if (name) existing.name = name;
+      if (!this.hostId) this.hostId = existing.id;
       return existing;
     }
     // 席が外れた古い token で新しい席を作らない。クライアントはセッションを捨てて入り直す
     if (token) throw new GameError('席が見つかりません。もう一度入室してください');
     if (!name) throw new GameError('ニックネームを入力してください');
     if (this.players.length >= LIMITS.maxPlayers) this.pruneAway();
-    if (this.players.length >= LIMITS.maxPlayers) throw new GameError('ルームが満員です');
+    // 全員不在で手札の席が満室を占める場合は、復旧する観戦者を1人だけ受け入れる
+    const recoverySeat = this.phase === 'playing' && !this.hasConnected() && this.players.length === LIMITS.maxPlayers;
+    if (this.players.length >= LIMITS.maxPlayers && !recoverySeat) throw new GameError('ルームが満員です');
     const player: Player = { id: randomUUID(), token: randomUUID(), name, connected: true, awaySince: null };
     this.players.push(player);
     if (!this.hostId || !this.players.some((p) => p.id === this.hostId)) this.hostId = player.id;
@@ -131,7 +134,7 @@ export class Room {
       if (next) {
         this.hostId = next.id;
         this.notice = `${next.name} さんがホストになりました`;
-      } else if (!holdsCards) {
+      } else {
         this.hostId = '';
       }
     }
@@ -178,6 +181,7 @@ export class Room {
     if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     const seated = this.players.filter((p) => p.connected);
     if (seated.length < 2) throw new GameError('2人以上で始めてください');
+    if (seated.length > LIMITS.maxPlayers) throw new GameError(`${LIMITS.maxPlayers}人以下で始めてください`);
     const total = seated.length * this.cardsPerPlayer;
     if (total > MAX_VALUE) throw new GameError('枚数が多すぎます');
 

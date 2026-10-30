@@ -62,7 +62,7 @@ export function Lobby({ view, isHost, act }: Props) {
   const [customTopic, setCustomTopic] = useState('');
   const [genre, setGenre] = useState('');
   const seated = view.players.filter((p) => p.connected).length;
-  const canStart = seated >= 2 && !view.aiBusy;
+  const canStart = seated >= 2 && seated <= LIMITS.maxPlayers && !view.aiBusy;
 
   if (!isHost) {
     return (
@@ -195,6 +195,7 @@ export function Lobby({ view, isHost, act }: Props) {
         </m.button>
       </m.div>
       <AnimatePresence>
+        {seated > LIMITS.maxPlayers && <p className="muted">{LIMITS.maxPlayers}人以下になると開始できます</p>}
         {seated < 2 && (
           <m.p
             className="muted"
