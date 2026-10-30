@@ -1,8 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomView } from '../../shared/types';
+import { AnimatePresence, m } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
 import { RoomScreen } from './RoomScreen';
+
+// 背景にゆっくり漂うカードの影。位置・大きさ・周期は固定値で、描画ごとに変わらないようにする
+const BACKDROP_CARDS = [
+  { left: '6%', size: 64, duration: 26, delay: 0 },
+  { left: '22%', size: 44, duration: 32, delay: -8 },
+  { left: '41%', size: 72, duration: 38, delay: -20 },
+  { left: '63%', size: 52, duration: 29, delay: -4 },
+  { left: '80%', size: 68, duration: 35, delay: -15 },
+  { left: '92%', size: 40, duration: 24, delay: -11 },
+];
+
+function Backdrop() {
+  return (
+    <div className="backdrop" aria-hidden="true">
+      {BACKDROP_CARDS.map((c) => (
+        <span
+          key={c.left}
+          className="backdrop-card"
+          style={{
+            left: c.left,
+            width: c.size,
+            height: c.size * 1.4,
+            animationDuration: `${c.duration}s`,
+            animationDelay: `${c.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function App() {
   const [view, setView] = useState<RoomView | null>(null);
@@ -74,9 +105,46 @@ export function App() {
 
   return (
     <div className="app">
-      {!connected && <div className="banner">サーバに再接続しています...</div>}
-      {error && <div className="toast">{error}</div>}
-      {view ? <RoomScreen view={view} act={act} onLeave={leave} /> : <Entry onEnter={enterRoom} />}
+      <Backdrop />
+      <AnimatePresence>
+        {!connected && (
+          <m.div
+            key="banner"
+            className="banner"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            サーバに再接続しています...
+          </m.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {error && (
+          <m.div
+            key={error}
+            className="toast"
+            role="alert"
+            initial={{ opacity: 0, y: -24, x: '-50%', scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, x: ['-50%', '-52%', '-48%', '-50%'], scale: 1 }}
+            exit={{ opacity: 0, y: -24, x: '-50%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24, x: { duration: 0.3, delay: 0.15 } }}
+          >
+            {error}
+          </m.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence mode="wait">
+        {view ? (
+          <m.div key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <RoomScreen view={view} act={act} onLeave={leave} />
+          </m.div>
+        ) : (
+          <m.div key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
+            <Entry onEnter={enterRoom} />
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
