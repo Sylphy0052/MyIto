@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { m } from 'motion/react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
-import { Board } from './Board';
+import { Board, DEAL_INTERVAL_S } from './Board';
 
 export type Act = (event: string, payload?: object) => Promise<void>;
 
@@ -24,6 +25,21 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     const values = new Map(view.cards.map((c) => [c.id, c.value ?? 0]));
     return view.order.every((id, i) => i === 0 || values.get(id)! > values.get(view.order[i - 1]!)!);
   }, [view.phase, view.cards, view.order]);
+  // 全部正しい順番のときだけ紙吹雪を出す。読み込みは必要になってから
+  useEffect(() => {
+    if (!isPerfect) return;
+    let isCancelled = false;
+    void import('canvas-confetti').then(({ default: confetti }) => {
+      if (isCancelled) return;
+      const burst = (originX: number, angle: number) =>
+        confetti({ particleCount: 90, spread: 70, angle, origin: { x: originX, y: 0.7 }, disableForReducedMotion: true });
+      burst(0.1, 60);
+      burst(0.9, 120);
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [isPerfect]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
 
   return (
@@ -56,20 +72,38 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       {view.notice && <div className="notice">{view.notice}</div>}
 
       {view.phase !== 'lobby' && myCards.length > 0 && (
-        <section className="my-numbers">
+        <m.section
+          key={view.phase === 'playing' ? 'dealt' : 'shown'}
+          className="my-numbers"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: view.phase === 'playing' ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
+        >
           あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
-        </section>
+        </m.section>
       )}
 
       {view.phase !== 'lobby' && myCards.length === 0 && (
         <div className="notice">観戦中です。次のラウンドから参加できます</div>
       )}
 
-      {view.phase === 'lobby' && <Lobby view={view} isHost={isHost} act={act} />}
-      {view.phase !== 'lobby' && <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} />}
+      {view.phase === 'lobby' ? (
+        <m.div key="lobby" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <Lobby view={view} isHost={isHost} act={act} />
+        </m.div>
+      ) : (
+        <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} />
+        </m.div>
+      )}
 
       {view.phase === 'result' && (
-        <section className="result">
+        <m.section
+          className="result"
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+        >
           <h2>{isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}</h2>
           {isHost ? (
             <button className="primary" onClick={() => act('lobby')}>
@@ -78,7 +112,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
           ) : (
             <p className="muted">ホストが次のラウンドを始めるのを待っています</p>
           )}
-        </section>
+        </m.section>
       )}
     </div>
   );

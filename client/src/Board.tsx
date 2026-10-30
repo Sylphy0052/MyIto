@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { m } from 'motion/react';
 import { isReadyToOpen, type CardView, type RoomView } from '../../shared/types';
 import { Card } from './Card';
 import type { Act } from './RoomScreen';
@@ -31,6 +32,9 @@ interface Drag {
 
 const DRAG_THRESHOLD_PX = 6;
 const ROW_MARGIN_PX = 40;
+/** 配るときの1枚あたりの間隔 (秒) */
+export const DEAL_INTERVAL_S = 0.08;
+const LAYOUT_TRANSITION = { type: 'spring', stiffness: 500, damping: 40 } as const;
 
 /** めくった位置 i の正誤。左隣より大きければ正しい */
 function verdictAt(row: CardView[], i: number): boolean {
@@ -68,6 +72,8 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
   const dragRef = useRef<Drag | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const handRef = useRef<HTMLDivElement>(null);
+  // 開始直後に表示されたときだけ、手札を1枚ずつ配る (途中参加や再接続では動かさない)
+  const shouldDeal = useRef(view.phase === 'playing' && view.cards.every((c) => c.state === 'hand'));
 
   const byId = new Map(view.cards.map((c) => [c.id, c]));
   const row = view.order.map((id) => byId.get(id)!).filter(Boolean);
@@ -171,8 +177,12 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
       const i = row.indexOf(c);
       const isRevealed = i < revealedCount;
       return (
-        <div
+        <m.div
           key={c.id}
+          layout="position"
+          transition={LAYOUT_TRANSITION}
+          initial={{ opacity: 0, scale: 1.12 }}
+          animate={{ opacity: 1, scale: 1 }}
           data-slot={c.id}
           className={`slot ${isPlaying ? 'draggable' : ''}`}
           onPointerDown={(e) => startDrag(e, c.id, 'row')}
@@ -195,7 +205,7 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
               </button>
             </div>
           )}
-        </div>
+        </m.div>
       );
     });
   if (drag?.isMoving && drag.insertAt !== null) {
@@ -243,15 +253,25 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
             自分のカード <span className="muted">(例えはめくるまで書き換えられる)</span>
           </h3>
           <div ref={handRef} className={`hand ${isUnplaceTarget ? 'drop-active' : ''}`}>
-            {myCards.map((c) => {
+            {myCards.map((c, i) => {
               const isInHand = c.state === 'hand';
               return (
-                <div
+                <m.div
                   key={c.id}
+                  layout="position"
+                  transition={LAYOUT_TRANSITION}
                   className={`slot ${isPlaying && isInHand ? 'draggable' : ''} ${c.id === movingId ? 'dragging' : ''}`}
                   onPointerDown={(e) => isInHand && startDrag(e, c.id, 'hand')}
                 >
-                  <Card card={c} ownerName="あなた" isMine canEdit={isPlaying} onHint={(h) => onHint(c.id, h)} />
+                  {/* 配る動き。layout や .dragging の opacity と干渉しないよう、内側で行う */}
+                  <m.div
+                    className="deal"
+                    initial={shouldDeal.current ? { opacity: 0, y: -160, rotate: -12, scale: 0.7 } : false}
+                    animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 22, delay: i * DEAL_INTERVAL_S }}
+                  >
+                    <Card card={c} ownerName="あなた" isMine canEdit={isPlaying} onHint={(h) => onHint(c.id, h)} />
+                  </m.div>
                   {isPlaying &&
                     (isInHand ? (
                       <button className="small" onClick={() => act('place', { cardId: c.id, toIndex: row.length })}>
@@ -262,7 +282,7 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
                         手札へ戻す
                       </button>
                     ))}
-                </div>
+                </m.div>
               );
             })}
           </div>
