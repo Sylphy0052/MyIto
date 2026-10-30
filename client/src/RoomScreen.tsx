@@ -4,6 +4,38 @@ import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
 
+const COPIED_LABEL_MS = 2000;
+
+// navigator.clipboard は https か localhost でしか使えない。LANのIPをhttpで開いたときは execCommand に頼る
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // 権限で拒否されたときは下の方法を試す
+    }
+  }
+  const previousFocus = document.activeElement;
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  // iOS Safari は select() だけでは選択されない
+  textarea.setSelectionRange(0, text.length);
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus();
+  }
+}
+
 export type Act = (event: string, payload?: object) => Promise<void>;
 
 interface Props {
@@ -58,14 +90,30 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     };
   }, [isPerfect, flow.isJustFinished]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
+  // 最後にコピーできた時刻。0 なら表示を戻す。連打したときは最後に押してから数える
+  const [copiedAt, setCopiedAt] = useState(0);
+  useEffect(() => {
+    if (copiedAt === 0) return;
+    const timer = setTimeout(() => setCopiedAt(0), COPIED_LABEL_MS);
+    return () => clearTimeout(timer);
+  }, [copiedAt]);
+  const copyInvite = async () => {
+    const isOk = await copyText(inviteUrl);
+    if (!isOk) {
+      // どの方法でもコピーできないときは、手で選んでコピーできるように出す
+      window.prompt('招待URL', inviteUrl);
+      return;
+    }
+    setCopiedAt(Date.now());
+  };
 
   return (
     <div className="room">
       <header className="room-header">
         <div>
           ルーム <strong className="code">{view.code}</strong>
-          <button className="small" onClick={() => navigator.clipboard?.writeText(inviteUrl)}>
-            招待URLをコピー
+          <button className="small" onClick={() => void copyInvite()}>
+            {copiedAt !== 0 ? 'コピーしました' : '招待URLをコピー'}
           </button>
         </div>
         <div className="players">
