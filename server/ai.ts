@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS } from '../shared/types';
@@ -16,6 +16,8 @@ let globalCalls: number[] = [];
 
 // claude を動かす作業ディレクトリ。ツールは無効だが、念のため空のディレクトリで動かす
 const workDir = mkdtempSync(join(tmpdir(), 'ito-ai-'));
+// サブスクリプションでログインした claude の HOME。ログイン情報だけを置く専用のディレクトリ
+const claudeHome = process.env.ITO_CLAUDE_HOME;
 
 export function sanitizeGenre(raw: unknown): string {
   if (typeof raw !== 'string') return '';
@@ -78,13 +80,9 @@ function normalizeTopic(output: string): string | null {
 
 /** claude -p でお題を1つ作る。失敗したら Error を投げる */
 export function generateTopic(genre: string): Promise<string> {
-  // サブスクリプション認証 (claude setup-token) を優先し、無ければ API キーを使う
-  const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!oauthToken && !apiKey) {
-    return Promise.reject(new Error('CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY is not set'));
+  if (!claudeHome || !existsSync(join(claudeHome, '.claude', '.credentials.json'))) {
+    return Promise.reject(new Error('claude is not logged in (ITO_CLAUDE_HOME)'));
   }
-  const authEnv = oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : { ANTHROPIC_API_KEY: apiKey! };
 
   return new Promise((resolve, reject) => {
     // --bare は OAuth トークンを読まないので使わない。代わりに設定・skill・MCP・ツールをすべて切る
@@ -105,8 +103,8 @@ export function generateTopic(genre: string): Promise<string> {
       ],
       {
         cwd: workDir,
-        // HOME も空の作業ディレクトリにして、ユーザー設定や CLAUDE.md を拾わない
-        env: { PATH: process.env.PATH ?? '', HOME: workDir, ...authEnv },
+        // HOME はログイン情報だけを置いた専用ディレクトリ。設定は --setting-sources '' で読まない
+        env: { PATH: process.env.PATH ?? '', HOME: claudeHome },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );

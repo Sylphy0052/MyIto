@@ -24,8 +24,12 @@ npm run build && npm start   # http://localhost:47213
 ## デプロイ
 
 ```sh
-# AIお題を使うなら、手元で `claude setup-token` を実行してトークンを作り、
-# CLAUDE_CODE_OAUTH_TOKEN=... を書いた .env を compose.yaml と同じディレクトリに置く
-# (任意。無ければAI生成は内蔵リストへフォールバック。ANTHROPIC_API_KEY でも動く)
 docker compose up -d --build
+```
+
+AIお題を使うなら、初回だけコンテナ内の`claude`でサブスクリプションにログインする。ログイン情報はvolume `claude-home`に残るので、コンテナを作り直してもやり直さなくてよい。ログインしていなければ、AI生成は内蔵リストのお題に切り替わる。
+
+```sh
+docker compose exec -it -e HOME=/home/node/claude-home ito claude
+# 起動したら /login でログインし、/exit で抜ける
 ```
