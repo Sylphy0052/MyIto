@@ -7,7 +7,7 @@ import { Server, type Socket } from 'socket.io';
 import { LIMITS, type Ack } from '../shared/types';
 import { GameError, Room, cleanText, newRoomCode } from './game';
 import { randomTopic } from './topics';
-import { acquireAiSlot, forgetRoom, generateTopics, sanitizeGenre } from './ai';
+import { acquireAiSlot, generateTopics, sanitizeGenre } from './ai';
 
 const PORT = Number(process.env.PORT ?? 47213);
 const REVEAL_INTERVAL_MS = 1_200;
@@ -200,7 +200,7 @@ io.on('connection', (socket: GameSocket) => {
       if (pid !== room.hostId) throw new GameError('ホストだけが操作できます');
       if (room.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
       if (room.aiBusy) throw new GameError('AIがお題を考え中です');
-      const limited = acquireAiSlot(room.code, socket.handshake.address);
+      const limited = acquireAiSlot();
       if (limited) throw new GameError(limited);
       room.aiBusy = true;
       room.notice = 'AIがお題を考えています...';
@@ -253,7 +253,6 @@ setInterval(() => {
     if (!room.hasConnected() && now - room.lastActiveAt > ROOM_IDLE_MS) {
       room.stopReveal();
       rooms.delete(code);
-      forgetRoom(code);
     }
   }
 }, 5 * 60_000);
