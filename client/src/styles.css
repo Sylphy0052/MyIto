@@ -172,13 +172,6 @@ textarea {
   font-weight: bold;
   flex: 1;
 }
-.mode-tag {
-  background: var(--card-back);
-  color: #fff;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-}
 
 .my-numbers {
   position: sticky;
@@ -211,31 +204,15 @@ textarea {
   flex: 1;
   min-width: 200px;
 }
-.radio {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .board h3 {
   margin: 20px 0 8px;
 }
-.field,
 .hand,
 .free-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-start;
-}
-.hands {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-.other-name {
-  font-weight: bold;
-  margin-bottom: 4px;
 }
 
 /* カード */
@@ -259,8 +236,7 @@ textarea {
   border-color: var(--ok);
   box-shadow: 0 0 0 3px var(--ok);
 }
-.card.ng,
-.card.miss {
+.card.ng {
   border-color: var(--ng);
   box-shadow: 0 0 0 3px var(--ng);
 }
@@ -302,12 +278,11 @@ textarea.card-hint {
 .card.ok .card-verdict {
   color: var(--ok);
 }
-.card.ng .card-verdict,
-.card.miss .card-verdict {
+.card.ng .card-verdict {
   color: var(--ng);
 }
 
-/* 自由配置 */
+/* 列 */
 .row-labels {
   display: flex;
   justify-content: space-between;
@@ -346,4 +321,37 @@ textarea.card-hint {
   border-radius: 8px;
   padding: 16px;
   text-align: center;
+}
+
+/* ドラッグ */
+.slot.draggable {
+  touch-action: none;
+  user-select: none;
+}
+.slot.dragging {
+  opacity: 0.3;
+}
+.drop-marker {
+  width: 6px;
+  min-height: 170px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.free-row {
+  min-height: 190px;
+  padding: 8px;
+  border: 2px dashed transparent;
+  border-radius: 10px;
+}
+.free-row.drop-active,
+.hand.drop-active {
+  border-color: var(--accent);
+  background: rgba(47, 111, 219, 0.06);
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0.85;
+  transform: rotate(3deg);
 }

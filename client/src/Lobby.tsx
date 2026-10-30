@@ -24,7 +24,7 @@ export function Lobby({ view, isHost, act }: Props) {
     return (
       <section className="lobby">
         <p>
-          モード: <strong>{view.mode === 'coop' ? '協力' : '自由配置'}</strong> / 1人 {view.cardsPerPlayer} 枚 / お題:{' '}
+          1人 {view.cardsPerPlayer} 枚 / お題:{' '}
           {SOURCE_LABEL[view.topicSource]}
         </p>
         <p className="muted">ホストが開始するのを待っています ({seated}人参加中)</p>
@@ -35,23 +35,10 @@ export function Lobby({ view, isHost, act }: Props) {
   return (
     <section className="lobby">
       <div className="field-row">
-        <span className="label">モード</span>
-        {(['coop', 'free'] as const).map((m) => (
-          <label key={m} className="radio">
-            <input
-              type="radio"
-              checked={view.mode === m}
-              onChange={() => act('settings', { mode: m, cardsPerPlayer: view.cardsPerPlayer })}
-            />
-            {m === 'coop' ? '協力 (順番に出す)' : '自由配置 (並べてオープン)'}
-          </label>
-        ))}
-      </div>
-      <div className="field-row">
         <span className="label">1人あたりの枚数</span>
         <select
           value={view.cardsPerPlayer}
-          onChange={(e) => act('settings', { mode: view.mode, cardsPerPlayer: Number(e.target.value) })}
+          onChange={(e) => act('settings', { cardsPerPlayer: Number(e.target.value) })}
         >
           {Array.from({ length: LIMITS.maxCardsPerPlayer }, (_, i) => i + 1).map((n) => (
             <option key={n} value={n}>

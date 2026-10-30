@@ -1,6 +1,5 @@
-export type Mode = 'coop' | 'free';
 export type Phase = 'lobby' | 'playing' | 'revealing' | 'result';
-export type CardState = 'hand' | 'played' | 'discarded';
+export type CardState = 'hand' | 'placed';
 export type TopicSource = 'random' | 'custom' | 'ai' | 'ai-fallback';
 
 export const LIMITS = {
@@ -32,7 +31,6 @@ export interface RoomView {
   you: string;
   hostId: string;
   phase: Phase;
-  mode: Mode;
   cardsPerPlayer: number;
   topic: string;
   topicSource: TopicSource;
@@ -41,12 +39,9 @@ export interface RoomView {
   round: number;
   players: PlayerView[];
   cards: CardView[];
-  /** 協力モード: 場に出た順 (ミスで捨てたカードも含む) */
-  field: string[];
-  misses: number;
-  /** 自由配置モード: 列の並び (左が小さい側) */
+  /** 列に置いたカードの並び (左が小さい側) */
   order: string[];
-  /** 自由配置モード: 左からめくった枚数 */
+  /** 左からめくった枚数 */
   revealed: number;
 }
 
@@ -55,3 +50,18 @@ export type AckResult =
   /** retry: 一時的な失敗 (タイムアウト、レート制限)。セッションを残して再試行してよい */
   | { ok: false; error: string; retry?: boolean };
 export type Ack = (res: AckResult) => void;
+
+/**
+ * オープンできるか。接続中の人のカードが全部列に置かれ、列が空でないこと。
+ * 切断中の人の手札は待たない (本人しか置けず、進行が止まるため)
+ */
+export function isReadyToOpen(
+  cards: readonly { ownerId: string; state: CardState }[],
+  players: readonly { id: string; connected: boolean }[],
+): boolean {
+  const connected = new Set(players.filter((p) => p.connected).map((p) => p.id));
+  return (
+    cards.some((c) => c.state === 'placed') &&
+    cards.every((c) => c.state === 'placed' || !connected.has(c.ownerId))
+  );
+}
