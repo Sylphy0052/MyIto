@@ -51,7 +51,9 @@ export function forgetRoom(roomCode: string): void {
 }
 
 // トークンやキーらしき文字列。sk-ant- 形式と、形式が変わっても拾えるよう長い英数字の連なり
-const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/g;
+const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/gi;
+// test 用。g 付きの正規表現を test に使うと lastIndex が残るので分ける
+const HAS_SECRET_LIKE = new RegExp(SECRET_LIKE.source, 'i');
 
 /** ログに出す前に、トークンやキーらしき文字列を伏せる */
 function maskSecrets(text: string): string {
@@ -88,7 +90,7 @@ function normalizeTopic(output: string): string | null {
   if (!line) return null;
   const topic = line.replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '').slice(0, LIMITS.topic);
   // タグや資格情報らしき文字列を含む出力はお題として配信しない
-  if (topic.length === 0 || /[<>]/.test(topic) || new RegExp(SECRET_LIKE.source).test(topic)) return null;
+  if (topic.length === 0 || /[<>]/.test(topic) || HAS_SECRET_LIKE.test(topic)) return null;
   return topic;
 }
 
