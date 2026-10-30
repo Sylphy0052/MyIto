@@ -3,10 +3,10 @@ services:
     build: .
     ports:
       - "47213:47213"
-    volumes:
-      # AIお題用の claude のログイン情報。コンテナを作り直しても残す
-      - claude-home:/home/node/claude-home
+    environment:
+      # AIお題用の ASK API。値は compose.yaml と同じ場所の .env に書く (git 管理外)
+      ASK_API_URL: ${ASK_API_URL:-}
+      ASK_API_KEY: ${ASK_API_KEY:-}
+      ASK_PROJECT_ID: ${ASK_PROJECT_ID:-}
+      ASK_MODEL: ${ASK_MODEL:-}
     restart: unless-stopped
-
-volumes:
-  claude-home:

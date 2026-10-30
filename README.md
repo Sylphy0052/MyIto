@@ -27,9 +27,14 @@ npm run build && npm start   # http://localhost:47213
 docker compose up -d --build
 ```
 
-AIお題を使うなら、初回だけコンテナ内の`claude`でサブスクリプションにログインする。ログイン情報はvolume `claude-home`に残るので、コンテナを作り直してもやり直さなくてよい。ログインしていなければ、AI生成は内蔵リストのお題に切り替わる。
+AIお題は社内のASK API (NoteDockと同じ窓口) で作る。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_KEY`か`ASK_PROJECT_ID`が無ければ、AI生成は内蔵リストのお題に切り替わる。
 
 ```sh
-docker compose exec -u node -e HOME=/home/node/claude-home ito claude
-# 起動したら /login でログインし、/exit で抜ける
+ASK_API_KEY=<APIキー>
+ASK_PROJECT_ID=<プロジェクトID>
+# 省略時の値
+# ASK_API_URL=https://langchaindemo.heroz.jp
+# ASK_MODEL=claude-55-sonnet-thinking
 ```
+
+`claude-home` volumeは不要になった。旧構成から移すときは`docker volume rm`で消してよい。
