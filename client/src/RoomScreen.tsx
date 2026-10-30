@@ -53,6 +53,9 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     [view.players],
   );
   const myCards = view.cards.filter((c) => c.ownerId === view.you).sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
+  const canRecover = view.phase === 'playing' && isHost && !view.cards.some((card) =>
+    view.players.some((player) => player.id === card.ownerId && player.connected),
+  );
   const onHint = useCallback((cardId: string, hint: string) => act('hint', { cardId, hint }), [act]);
   const isPerfect = useMemo(() => {
     if (view.phase !== 'result') return false;
@@ -225,6 +228,12 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} />
         </m.div>
+      )}
+
+      {canRecover && (
+        <button className="small" onClick={() => act('lobby')}>
+          参加者が不在のためロビーに戻る
+        </button>
       )}
 
       {view.phase === 'result' && (
