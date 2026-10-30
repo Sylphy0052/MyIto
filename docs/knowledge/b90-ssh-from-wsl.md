@@ -8,7 +8,7 @@ updated: 2026-10-30
 
 ## 何が起きたか
 
-- WSLで`ssh b90 '...'`を実行すると、応答が無いまま止まる。前のセッションでは`ssh: connect to host b90 port 22: Connection timed out`が出た
+- WSLで`ssh b90 '...'`を実行すると、応答が無いまま止まる (2026-10-30に再現。30秒待っても出力なし)。それより前の試行では`ssh: connect to host b90 port 22: Connection timed out`が出た
 - Windows側のOpenSSHで`powershell.exe -NoProfile -Command "ssh b90 '...'"`とすると、つながる
 - Windows側の`scp`に`\\wsl.localhost\...`のパスを渡すと、`stat local ...: Unknown error`で失敗する
 

@@ -30,6 +30,6 @@ docker compose up -d --build
 AIお題を使うなら、初回だけコンテナ内の`claude`でサブスクリプションにログインする。ログイン情報はvolume `claude-home`に残るので、コンテナを作り直してもやり直さなくてよい。ログインしていなければ、AI生成は内蔵リストのお題に切り替わる。
 
 ```sh
-docker compose exec -it -e HOME=/home/node/claude-home ito claude
+docker compose exec -u node -e HOME=/home/node/claude-home ito claude
 # 起動したら /login でログインし、/exit で抜ける
 ```

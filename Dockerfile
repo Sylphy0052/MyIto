@@ -10,7 +10,7 @@ COPY . .
 RUN npm run build
 
 # claude のログイン情報を置く。compose の volume をここにマウントする
-RUN mkdir -p /home/node/claude-home && chown node:node /home/node/claude-home
+RUN mkdir -p /home/node/claude-home && chown node:node /home/node/claude-home && chmod 700 /home/node/claude-home
 ENV NODE_ENV=production PORT=47213 ITO_CLAUDE_HOME=/home/node/claude-home
 USER node
 EXPOSE 47213

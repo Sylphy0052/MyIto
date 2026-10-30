@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS } from '../shared/types';
@@ -50,9 +50,23 @@ export function forgetRoom(roomCode: string): void {
   roomLastCall.delete(roomCode);
 }
 
+// トークンやキーらしき文字列。sk-ant- 形式と、形式が変わっても拾えるよう長い英数字の連なり
+const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/g;
+
 /** ログに出す前に、トークンやキーらしき文字列を伏せる */
 function maskSecrets(text: string): string {
-  return text.replace(/sk-ant-[\w-]+/gi, '***');
+  return text.replace(SECRET_LIKE, '***');
+}
+
+/** ログイン済みで、claude がログイン情報を読み書きできるか (トークン更新で書き込む) */
+function isLoggedIn(home: string | undefined): home is string {
+  if (!home) return false;
+  try {
+    accessSync(join(home, '.claude', '.credentials.json'), constants.R_OK | constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function buildPrompt(genre: string): string {
@@ -74,13 +88,13 @@ function normalizeTopic(output: string): string | null {
   if (!line) return null;
   const topic = line.replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '').slice(0, LIMITS.topic);
   // タグや資格情報らしき文字列を含む出力はお題として配信しない
-  if (topic.length === 0 || /[<>]|sk-ant-/i.test(topic)) return null;
+  if (topic.length === 0 || /[<>]/.test(topic) || new RegExp(SECRET_LIKE.source).test(topic)) return null;
   return topic;
 }
 
 /** claude -p でお題を1つ作る。失敗したら Error を投げる */
 export function generateTopic(genre: string): Promise<string> {
-  if (!claudeHome || !existsSync(join(claudeHome, '.claude', '.credentials.json'))) {
+  if (!isLoggedIn(claudeHome)) {
     return Promise.reject(new Error('claude is not logged in (ITO_CLAUDE_HOME)'));
   }
 
@@ -103,7 +117,8 @@ export function generateTopic(genre: string): Promise<string> {
       ],
       {
         cwd: workDir,
-        // HOME はログイン情報だけを置いた専用ディレクトリ。設定は --setting-sources '' で読まない
+        // HOME はログイン情報だけを置いた専用ディレクトリ。設定は --setting-sources '' で読まない。
+        // ログイン情報を守っているのはツール無効だけなので、--tools を緩めるなら HOME を分けること
         env: { PATH: process.env.PATH ?? '', HOME: claudeHome },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
