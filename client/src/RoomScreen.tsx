@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { m } from 'motion/react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
@@ -16,6 +16,7 @@ async function copyText(text: string): Promise<boolean> {
       // 権限で拒否されたときは下の方法を試す
     }
   }
+  const previousFocus = document.activeElement;
   const textarea = document.createElement('textarea');
   textarea.value = text;
   textarea.setAttribute('readonly', '');
@@ -23,16 +24,19 @@ async function copyText(text: string): Promise<boolean> {
   textarea.style.opacity = '0';
   document.body.appendChild(textarea);
   textarea.select();
+  // iOS Safari は select() だけでは選択されない
+  textarea.setSelectionRange(0, text.length);
   try {
     return document.execCommand('copy');
   } catch {
     return false;
   } finally {
     textarea.remove();
+    if (previousFocus instanceof HTMLElement) previousFocus.focus();
   }
 }
 
-export type Act =(event: string, payload?: object) => Promise<void>;
+export type Act = (event: string, payload?: object) => Promise<void>;
 
 interface Props {
   view: RoomView;
@@ -87,6 +91,8 @@ export function RoomScreen({ view, act, onLeave }: Props) {
   }, [isPerfect, flow.isJustFinished]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
   const [isCopied, setIsCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const copyInvite = async () => {
     const isOk = await copyText(inviteUrl);
     if (!isOk) {
@@ -95,7 +101,9 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       return;
     }
     setIsCopied(true);
-    setTimeout(() => setIsCopied(false), COPIED_LABEL_MS);
+    // 連打したときは、最後に押してから数える
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setIsCopied(false), COPIED_LABEL_MS);
   };
 
   return (
