@@ -204,31 +204,15 @@ textarea {
   flex: 1;
   min-width: 200px;
 }
-.radio {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .board h3 {
   margin: 20px 0 8px;
 }
-.field,
 .hand,
 .free-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: flex-start;
-}
-.hands {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-.other-name {
-  font-weight: bold;
-  margin-bottom: 4px;
 }
 
 /* カード */
@@ -252,8 +236,7 @@ textarea {
   border-color: var(--ok);
   box-shadow: 0 0 0 3px var(--ok);
 }
-.card.ng,
-.card.miss {
+.card.ng {
   border-color: var(--ng);
   box-shadow: 0 0 0 3px var(--ng);
 }
@@ -295,8 +278,7 @@ textarea.card-hint {
 .card.ok .card-verdict {
   color: var(--ok);
 }
-.card.ng .card-verdict,
-.card.miss .card-verdict {
+.card.ng .card-verdict {
   color: var(--ng);
 }
 
@@ -345,9 +327,6 @@ textarea.card-hint {
 .slot.draggable {
   touch-action: none;
   user-select: none;
-}
-.slot.draggable textarea {
-  touch-action: auto;
 }
 .slot.dragging {
   opacity: 0.3;

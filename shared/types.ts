@@ -50,3 +50,18 @@ export type AckResult =
   /** retry: 一時的な失敗 (タイムアウト、レート制限)。セッションを残して再試行してよい */
   | { ok: false; error: string; retry?: boolean };
 export type Ack = (res: AckResult) => void;
+
+/**
+ * オープンできるか。接続中の人のカードが全部列に置かれ、列が空でないこと。
+ * 切断中の人の手札は待たない (本人しか置けず、進行が止まるため)
+ */
+export function isReadyToOpen(
+  cards: readonly { ownerId: string; state: CardState }[],
+  players: readonly { id: string; connected: boolean }[],
+): boolean {
+  const connected = new Set(players.filter((p) => p.connected).map((p) => p.id));
+  return (
+    cards.some((c) => c.state === 'placed') &&
+    cards.every((c) => c.state === 'placed' || !connected.has(c.ownerId))
+  );
+}

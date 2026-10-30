@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { Board } from './Board';
@@ -17,13 +17,13 @@ export function RoomScreen({ view, act, onLeave }: Props) {
     (id: string) => view.players.find((p) => p.id === id)?.name ?? '?',
     [view.players],
   );
-  const myCards = view.cards.filter((c) => c.ownerId === view.you);
+  const myCards = view.cards.filter((c) => c.ownerId === view.you).sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
   const onHint = useCallback((cardId: string, hint: string) => act('hint', { cardId, hint }), [act]);
-  const isPerfect = view.order.every((id, i) => {
-    if (i === 0) return true;
-    const value = (cid: string) => view.cards.find((c) => c.id === cid)?.value ?? 0;
-    return value(id) > value(view.order[i - 1]!);
-  });
+  const isPerfect = useMemo(() => {
+    if (view.phase !== 'result') return false;
+    const values = new Map(view.cards.map((c) => [c.id, c.value ?? 0]));
+    return view.order.every((id, i) => i === 0 || values.get(id)! > values.get(view.order[i - 1]!)!);
+  }, [view.phase, view.cards, view.order]);
   const inviteUrl = `${location.origin}/?room=${view.code}`;
 
   return (

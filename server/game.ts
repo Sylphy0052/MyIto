@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   LIMITS,
+  isReadyToOpen,
   type CardState,
   type Phase,
   type RoomView,
@@ -36,6 +37,11 @@ export class GameError extends Error {}
 export function cleanText(raw: unknown, max: number): string {
   if (typeof raw !== 'string') return '';
   return raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+}
+
+/** 0 以上 max 以下の整数か。Number() を通さず、null や true を位置として受け付けない */
+function isIndex(value: unknown, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max;
 }
 
 function shuffle<T>(items: readonly T[]): T[] {
@@ -164,11 +170,13 @@ export class Room {
     if (total > MAX_VALUE) throw new GameError('枚数が多すぎます');
 
     const values = shuffle(Array.from({ length: MAX_VALUE }, (_, i) => i + 1)).slice(0, total);
-    this.cards = seated.flatMap((p, pi) =>
-      values
-        .slice(pi * this.cardsPerPlayer, (pi + 1) * this.cardsPerPlayer)
-        .sort((a, b) => a - b)
-        .map((value) => ({ id: randomUUID(), ownerId: p.id, value, hint: '', state: 'hand' as const })),
+    // 配列の並びから同じ持ち主のカードの大小が分からないよう、全体を混ぜてから持つ
+    this.cards = shuffle(
+      seated.flatMap((p, pi) =>
+        values
+          .slice(pi * this.cardsPerPlayer, (pi + 1) * this.cardsPerPlayer)
+          .map((value) => ({ id: randomUUID(), ownerId: p.id, value, hint: '', state: 'hand' as const })),
+      ),
     );
     this.order = [];
     this.revealed = 0;
@@ -206,10 +214,9 @@ export class Room {
     if (this.phase !== 'playing') throw new GameError('いまは置けません');
     const card = this.ownCard(playerId, cardId);
     if (card.state !== 'hand') throw new GameError('そのカードは置いてあります');
-    const to = Number(toIndex);
-    if (!Number.isInteger(to) || to < 0 || to > this.order.length) throw new GameError('置けない位置です');
+    if (!isIndex(toIndex, this.order.length)) throw new GameError('置けない位置です');
     card.state = 'placed';
-    this.order = [...this.order.slice(0, to), card.id, ...this.order.slice(to)];
+    this.order = [...this.order.slice(0, toIndex), card.id, ...this.order.slice(toIndex)];
   }
 
   /** 列に置いた自分のカードを手札へ戻す */
@@ -225,12 +232,9 @@ export class Room {
   move(cardId: unknown, toIndex: unknown): void {
     if (this.phase !== 'playing') throw new GameError('いまは動かせません');
     const from = this.order.indexOf(cardId as string);
-    const to = Number(toIndex);
-    if (from < 0 || !Number.isInteger(to) || to < 0 || to >= this.order.length) {
-      throw new GameError('動かせない位置です');
-    }
+    if (from < 0 || !isIndex(toIndex, this.order.length - 1)) throw new GameError('動かせない位置です');
     const next = this.order.filter((id) => id !== cardId);
-    next.splice(to, 0, cardId as string);
+    next.splice(toIndex, 0, cardId as string);
     this.order = next;
   }
 
@@ -238,7 +242,10 @@ export class Room {
   open(playerId: string, intervalMs: number, onStep: () => void): void {
     this.requireHost(playerId);
     if (this.phase !== 'playing') throw new GameError('いまはオープンできません');
-    if (this.cards.some((c) => c.state !== 'placed')) throw new GameError('全員のカードが置かれてからオープンしてください');
+    if (!isReadyToOpen(this.cards, this.players)) throw new GameError('全員のカードが置かれてからオープンしてください');
+    // 切断中の人の手札は列に入れずにめくる。置ける本人がいないと進行が止まるため
+    const absent = this.players.filter((p) => !p.connected && this.cards.some((c) => c.ownerId === p.id && c.state === 'hand'));
+    if (absent.length > 0) this.notice = `${absent.map((p) => p.name).join('、')} さんの手札は列に入れずにめくります`;
     this.phase = 'revealing';
     this.revealed = 0;
     this.revealTimer = setInterval(() => {
@@ -247,7 +254,11 @@ export class Room {
         this.stopReveal();
         this.phase = 'result';
       }
-      onStep();
+      try {
+        onStep();
+      } catch (e) {
+        console.error('reveal broadcast failed', e);
+      }
     }, intervalMs);
   }
 

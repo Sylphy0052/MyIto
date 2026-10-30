@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import type { CardView, RoomView } from '../../shared/types';
+import { isReadyToOpen, type CardView, type RoomView } from '../../shared/types';
 import { Card } from './Card';
 import type { Act } from './RoomScreen';
 
@@ -12,6 +12,7 @@ interface Props {
 }
 
 interface Drag {
+  pointerId: number;
   cardId: string;
   from: 'hand' | 'row';
   /** ポインタ位置とカード左上の差 */
@@ -70,11 +71,11 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
 
   const byId = new Map(view.cards.map((c) => [c.id, c]));
   const row = view.order.map((id) => byId.get(id)!).filter(Boolean);
-  const myCards = view.cards.filter((c) => c.ownerId === view.you);
+  const myCards = view.cards.filter((c) => c.ownerId === view.you).sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
   const isPlaying = view.phase === 'playing';
   const revealedCount = view.phase === 'result' ? row.length : view.revealed;
   const placedCount = view.cards.filter((c) => c.state === 'placed').length;
-  const isAllPlaced = view.cards.length > 0 && placedCount === view.cards.length;
+  const isAllPlaced = isReadyToOpen(view.cards, view.players);
 
   const updateDrag = (next: Drag | null) => {
     dragRef.current = next;
@@ -82,10 +83,12 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
   };
 
   const startDrag = (e: ReactPointerEvent<HTMLElement>, cardId: string, from: Drag['from']) => {
-    if (!isPlaying || e.button !== 0) return;
+    // 2本目の指やドラッグ中の別の押下では始めない
+    if (!isPlaying || e.button !== 0 || !e.isPrimary || dragRef.current) return;
     if ((e.target as HTMLElement).closest('textarea, button')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     updateDrag({
+      pointerId: e.pointerId,
       cardId,
       from,
       offsetX: e.clientX - rect.left,
@@ -109,7 +112,9 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
     if (!isDragging) return;
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
-      if (!d) return;
+      if (!d || e.pointerId !== d.pointerId) return;
+      // ウィンドウ外でボタンを離すと pointerup が来ないことがある
+      if (e.pointerType === 'mouse' && e.buttons === 0) return updateDrag(null);
       const isMoving = d.isMoving || Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > DRAG_THRESHOLD_PX;
       if (!isMoving) return;
       e.preventDefault();
@@ -122,8 +127,9 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
         isOverHand: !!handRef.current && contains(handRef.current.getBoundingClientRect(), e.clientX, e.clientY),
       });
     };
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
       const d = dragRef.current;
+      if (!d || e.pointerId !== d.pointerId) return;
       updateDrag(null);
       if (!d?.isMoving) return;
       const { byId: cards, you, act: send } = latest.current;
@@ -133,7 +139,9 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
         void send('unplace', { cardId: d.cardId });
       }
     };
-    const onCancel = () => updateDrag(null);
+    const onCancel = (e: PointerEvent) => {
+      if (e.pointerId === dragRef.current?.pointerId) updateDrag(null);
+    };
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
