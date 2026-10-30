@@ -243,9 +243,11 @@ export class Room {
     this.requireHost(playerId);
     if (this.phase !== 'playing') throw new GameError('いまはオープンできません');
     if (!isReadyToOpen(this.cards, this.players)) throw new GameError('全員のカードが置かれてからオープンしてください');
-    // 切断中の人の手札は列に入れずにめくる。置ける本人がいないと進行が止まるため
+    // 切断中の人の手札は答え合わせから外す。置ける本人がいないと進行が止まるため
     const absent = this.players.filter((p) => !p.connected && this.cards.some((c) => c.ownerId === p.id && c.state === 'hand'));
-    if (absent.length > 0) this.notice = `${absent.map((p) => p.name).join('、')} さんの手札は列に入れずにめくります`;
+    if (absent.length > 0) {
+      this.notice = `${absent.map((p) => p.name).join('、')} さんが不在のため、列に置かれていない手札は答え合わせに含めません`;
+    }
     this.phase = 'revealing';
     this.revealed = 0;
     this.revealTimer = setInterval(() => {

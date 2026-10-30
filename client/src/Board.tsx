@@ -75,6 +75,9 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
   const isPlaying = view.phase === 'playing';
   const revealedCount = view.phase === 'result' ? row.length : view.revealed;
   const placedCount = view.cards.filter((c) => c.state === 'placed').length;
+  // 切断中の人の手札は待たないので、分母に入れない
+  const connectedIds = new Set(view.players.filter((p) => p.connected).map((p) => p.id));
+  const awaitedCount = view.cards.filter((c) => c.state === 'placed' || connectedIds.has(c.ownerId)).length;
   const isAllPlaced = isReadyToOpen(view.cards, view.players);
 
   const updateDrag = (next: Drag | null) => {
@@ -83,8 +86,8 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
   };
 
   const startDrag = (e: ReactPointerEvent<HTMLElement>, cardId: string, from: Drag['from']) => {
-    // 2本目の指やドラッグ中の別の押下では始めない
-    if (!isPlaying || e.button !== 0 || !e.isPrimary || dragRef.current) return;
+    // 2本目の指 (isPrimary=false) では始めない。新しい主ポインタの押下は、取り残されたドラッグを置き換える
+    if (!isPlaying || e.button !== 0 || !e.isPrimary) return;
     if ((e.target as HTMLElement).closest('textarea, button')) return;
     const rect = e.currentTarget.getBoundingClientRect();
     updateDrag({
@@ -131,7 +134,7 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
       updateDrag(null);
-      if (!d?.isMoving) return;
+      if (!d.isMoving) return;
       const { byId: cards, you, act: send } = latest.current;
       if (d.insertAt !== null) {
         void send(d.from === 'hand' ? 'place' : 'move', { cardId: d.cardId, toIndex: d.insertAt });
@@ -221,11 +224,11 @@ export function Board({ view, isHost, nameOf, act, onHint }: Props) {
       {isPlaying &&
         (isHost ? (
           <button className="primary big" disabled={!isAllPlaced} onClick={() => act('open')}>
-            {isAllPlaced ? 'オープン (小さい側から順にめくる)' : `全員が置くまで待つ (${placedCount} / ${view.cards.length})`}
+            {isAllPlaced ? 'オープン (小さい側から順にめくる)' : `全員が置くまで待つ (${placedCount} / ${awaitedCount})`}
           </button>
         ) : (
           <p className="muted">
-            {isAllPlaced ? '全員置きました。ホストが「オープン」します' : `置いたカード ${placedCount} / ${view.cards.length}`}
+            {isAllPlaced ? '全員置きました。ホストが「オープン」します' : `置いたカード ${placedCount} / ${awaitedCount}`}
           </p>
         ))}
       {view.phase === 'revealing' && (
