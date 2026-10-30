@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { accessSync, constants, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS } from '../shared/types';
@@ -16,6 +16,8 @@ let globalCalls: number[] = [];
 
 // claude を動かす作業ディレクトリ。ツールは無効だが、念のため空のディレクトリで動かす
 const workDir = mkdtempSync(join(tmpdir(), 'ito-ai-'));
+// サブスクリプションでログインした claude の HOME。ログイン情報だけを置く専用のディレクトリ
+const claudeHome = process.env.ITO_CLAUDE_HOME;
 
 export function sanitizeGenre(raw: unknown): string {
   if (typeof raw !== 'string') return '';
@@ -48,9 +50,25 @@ export function forgetRoom(roomCode: string): void {
   roomLastCall.delete(roomCode);
 }
 
+// トークンやキーらしき文字列。sk-ant- 形式と、形式が変わっても拾えるよう長い英数字の連なり
+const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/gi;
+// test 用。g 付きの正規表現を test に使うと lastIndex が残るので分ける
+const HAS_SECRET_LIKE = new RegExp(SECRET_LIKE.source, 'i');
+
 /** ログに出す前に、トークンやキーらしき文字列を伏せる */
 function maskSecrets(text: string): string {
-  return text.replace(/sk-ant-[\w-]+/gi, '***');
+  return text.replace(SECRET_LIKE, '***');
+}
+
+/** ログイン済みで、claude がログイン情報を読み書きできるか (トークン更新で書き込む) */
+function isLoggedIn(home: string | undefined): home is string {
+  if (!home) return false;
+  try {
+    accessSync(join(home, '.claude', '.credentials.json'), constants.R_OK | constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function buildPrompt(genre: string): string {
@@ -72,19 +90,15 @@ function normalizeTopic(output: string): string | null {
   if (!line) return null;
   const topic = line.replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '').slice(0, LIMITS.topic);
   // タグや資格情報らしき文字列を含む出力はお題として配信しない
-  if (topic.length === 0 || /[<>]|sk-ant-/i.test(topic)) return null;
+  if (topic.length === 0 || /[<>]/.test(topic) || HAS_SECRET_LIKE.test(topic)) return null;
   return topic;
 }
 
 /** claude -p でお題を1つ作る。失敗したら Error を投げる */
 export function generateTopic(genre: string): Promise<string> {
-  // サブスクリプション認証 (claude setup-token) を優先し、無ければ API キーを使う
-  const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!oauthToken && !apiKey) {
-    return Promise.reject(new Error('CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY is not set'));
+  if (!isLoggedIn(claudeHome)) {
+    return Promise.reject(new Error('claude is not logged in (ITO_CLAUDE_HOME)'));
   }
-  const authEnv = oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : { ANTHROPIC_API_KEY: apiKey! };
 
   return new Promise((resolve, reject) => {
     // --bare は OAuth トークンを読まないので使わない。代わりに設定・skill・MCP・ツールをすべて切る
@@ -105,8 +119,9 @@ export function generateTopic(genre: string): Promise<string> {
       ],
       {
         cwd: workDir,
-        // HOME も空の作業ディレクトリにして、ユーザー設定や CLAUDE.md を拾わない
-        env: { PATH: process.env.PATH ?? '', HOME: workDir, ...authEnv },
+        // HOME はログイン情報だけを置いた専用ディレクトリ。設定は --setting-sources '' で読まない。
+        // ログイン情報を守っているのはツール無効だけなので、--tools を緩めるなら HOME を分けること
+        env: { PATH: process.env.PATH ?? '', HOME: claudeHome },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );
