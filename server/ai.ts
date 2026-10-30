@@ -60,7 +60,9 @@ const HAS_SECRET_LIKE = new RegExp(SECRET_LIKE.source, 'i');
 
 /** ログに出す前に、トークンやキーらしき文字列を伏せる */
 function maskSecrets(text: string): string {
-  return text.replace(SECRET_LIKE, '***');
+  // 短く切られたキーの断片は SECRET_LIKE に掛からないので、キーそのものも伏せる
+  const withoutKey = ASK_API_KEY ? text.replaceAll(ASK_API_KEY, '***') : text;
+  return withoutKey.replace(SECRET_LIKE, '***');
 }
 
 /** キーを平文で送らないよう https だけを許す。手元の確認用に localhost だけは http も通す */
@@ -68,23 +70,24 @@ function isSafeAskUrl(raw: string): boolean {
   try {
     const url = new URL(raw);
     if (url.protocol === 'https:') return true;
-    return url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   } catch {
     return false;
   }
 }
 
-function isAskConfigured(): boolean {
-  return (
-    ASK_API_KEY.length > 0 &&
-    Number.isInteger(ASK_PROJECT_ID) &&
-    ASK_PROJECT_ID > 0 &&
-    isSafeAskUrl(ASK_API_URL)
-  );
+/** ASK API を使えない理由。使えるなら空 */
+function askConfigProblems(): string[] {
+  return [
+    ASK_API_KEY.length === 0 && 'ASK_API_KEY is empty',
+    !(Number.isInteger(ASK_PROJECT_ID) && ASK_PROJECT_ID > 0) && 'ASK_PROJECT_ID must be a positive integer',
+    !isSafeAskUrl(ASK_API_URL) && 'ASK_API_URL must be https (http only for localhost)',
+  ].filter((p): p is string => typeof p === 'string');
 }
 
-if (!isAskConfigured()) {
-  console.warn('ASK API is not configured (ASK_API_KEY, ASK_PROJECT_ID, ASK_API_URL). AI topics fall back to the built-in list');
+const configProblems = askConfigProblems();
+if (configProblems.length > 0) {
+  console.warn(`ASK API is not configured: ${configProblems.join(', ')}. AI topics fall back to the built-in list`);
 }
 
 // system prompt。ジャンルは userInput に分けて渡す
@@ -161,14 +164,17 @@ async function readAnswer(body: ReadableStream<Uint8Array>): Promise<Answer> {
   }
 }
 
-/** エラー応答の本文を先頭だけ読む。巨大な本文をメモリに載せない */
-async function readHead(body: ReadableStream<Uint8Array> | null, maxChars: number): Promise<string> {
+/**
+ * エラー応答の本文を、minChars に届くまでだけ読む。巨大な本文をメモリに載せない。
+ * 切り詰めは伏せ字の後で行う (先に切るとキーの断片が伏せ字を逃れる) ので、ここでは切らない
+ */
+async function readHead(body: ReadableStream<Uint8Array> | null, minChars: number): Promise<string> {
   if (!body) return '';
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let text = '';
   try {
-    while (text.length < maxChars) {
+    while (text.length < minChars) {
       const { done, value } = await reader.read();
       if (done) break;
       text += decoder.decode(value, { stream: true });
@@ -178,13 +184,13 @@ async function readHead(body: ReadableStream<Uint8Array> | null, maxChars: numbe
   } finally {
     reader.cancel().catch(() => {});
   }
-  return text.slice(0, maxChars);
+  return text;
 }
 
 /** ASK API でお題を1つ作る。失敗したら Error を投げる */
 export async function generateTopic(genre: string): Promise<string> {
-  if (!isAskConfigured()) {
-    throw new Error('ASK API is not configured (ASK_API_KEY, ASK_PROJECT_ID, ASK_API_URL)');
+  if (configProblems.length > 0) {
+    throw new Error(`ASK API is not configured: ${configProblems.join(', ')}`);
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -215,8 +221,9 @@ export async function generateTopic(genre: string): Promise<string> {
       signal: controller.signal,
     });
     if (!res.ok) {
-      const detail = await readHead(res.body, MAX_ERROR_DETAIL_CHARS);
-      throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail)}`);
+      // 切り詰める位置をまたぐキーも丸ごと読んでから伏せる
+      const detail = await readHead(res.body, MAX_ERROR_DETAIL_CHARS + ASK_API_KEY.length);
+      throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail).slice(0, MAX_ERROR_DETAIL_CHARS)}`);
     }
     if (!res.body) throw new Error('ASK API returned no body');
     const { message, skippedLines } = await readAnswer(res.body);
