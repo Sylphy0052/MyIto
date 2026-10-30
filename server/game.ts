@@ -157,9 +157,13 @@ export class Room {
   setTopic(playerId: string, topic: string, source: TopicSource): void {
     this.requireHost(playerId);
     if (this.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
+    // 生成中に決めたお題は生成完了時に上書きされるので受け付けない
+    if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     if (!topic) throw new GameError('お題を入力してください');
     this.topic = topic;
     this.topicSource = source;
+    // 候補から選んだとき以外は、古い候補を残さない
+    if (source !== 'ai') this.topicCandidates = [];
   }
 
   pickCandidate(playerId: string, index: unknown): void {

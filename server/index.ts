@@ -217,6 +217,7 @@ io.on('connection', (socket: GameSocket) => {
           if (room.phase !== 'lobby') return;
           room.topic = randomTopic(room.topic);
           room.topicSource = 'ai-fallback';
+          room.topicCandidates = [];
           room.notice = 'AI生成に失敗したので、内蔵リストからお題を出しました';
         })
         .finally(() => {

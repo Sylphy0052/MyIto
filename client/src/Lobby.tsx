@@ -50,7 +50,9 @@ export function Lobby({ view, isHost, act }: Props) {
 
       <div className="field-row">
         <span className="label">お題 ({SOURCE_LABEL[view.topicSource]})</span>
-        <button onClick={() => act('topic:random')}>ランダム</button>
+        <button disabled={view.aiBusy} onClick={() => act('topic:random')}>
+          ランダム
+        </button>
       </div>
       <div className="field-row">
         <input
@@ -59,7 +61,7 @@ export function Lobby({ view, isHost, act }: Props) {
           maxLength={LIMITS.topic}
           onChange={(e) => setCustomTopic(e.target.value)}
         />
-        <button disabled={!customTopic.trim()} onClick={() => act('topic:set', { topic: customTopic })}>
+        <button disabled={!customTopic.trim() || view.aiBusy} onClick={() => act('topic:set', { topic: customTopic })}>
           決定
         </button>
       </div>
