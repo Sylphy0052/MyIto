@@ -181,6 +181,7 @@ export class Room {
     if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     const seated = this.players.filter((p) => p.connected);
     if (seated.length < 2) throw new GameError('2人以上で始めてください');
+    if (seated.length > LIMITS.maxPlayers) throw new GameError(`${LIMITS.maxPlayers}人以下で始めてください`);
     const total = seated.length * this.cardsPerPlayer;
     if (total > MAX_VALUE) throw new GameError('枚数が多すぎます');
 
