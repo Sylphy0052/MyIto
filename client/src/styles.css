@@ -200,7 +200,9 @@ textarea::placeholder {
 .entry h1 {
   margin: 0 0 var(--sp-2);
   text-align: center;
-  font-size: var(--fs-xxl);
+  /* 狭い画面でも1行に収める (長いタイトルが単語の途中で折れないように) */
+  font-size: clamp(1.5rem, 7.5vw, var(--fs-xxl));
+  white-space: nowrap;
   letter-spacing: 0.04em;
   background: linear-gradient(90deg, #8aa4ff, #d3a6ff);
   -webkit-background-clip: text;
