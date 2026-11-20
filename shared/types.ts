@@ -30,8 +30,10 @@ export const LIMITS = {
 } as const;
 
 export const DOORS_DEFAULT_QUESTIONS = 10;
-/** ラウンドの制限時間 (分)。0 はなし */
-export const DOORS_TIME_LIMITS: readonly number[] = [0, 3, 5, 10, 15, 20, 30];
+/** ロビーで決めるラウンドの制限時間の上限 (分) */
+export const DOORS_MAX_TIME_LIMIT_MIN = 60;
+/** ラウンドの制限時間 (分)。0 はなし、ほかは 1〜60 分を 1 分刻み */
+export const DOORS_TIME_LIMITS: readonly number[] = Array.from({ length: DOORS_MAX_TIME_LIMIT_MIN + 1 }, (_, i) => i);
 
 export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
   return phase.startsWith('doors-');
