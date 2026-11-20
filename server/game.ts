@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   DOORS_AI_MODELS,
   DOORS_DEFAULT_QUESTIONS,
+  DOORS_TIME_LIMITS,
   LIMITS,
   isReadyToOpen,
   type CardState,
@@ -12,7 +13,7 @@ import {
   type TopicSource,
 } from '../shared/types';
 import { randomDoorsTheme, randomTopic } from './topics';
-import { AI_GM_ID, DoorsRound, type Seat } from './doors';
+import { AI_GM_ID, DOORS_MINUTE_MS, DoorsRound, type Seat } from './doors';
 import { GameError } from './errors';
 import { DOORS_MODEL, isAskConfigured } from './ai';
 
@@ -69,7 +70,7 @@ export class Room {
   hostId = '';
   phase: Phase = 'lobby';
   mode: GameMode = 'ito';
-  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, aiModel: DOORS_MODEL };
+  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, timeLimitMin: 0, aiModel: DOORS_MODEL };
   /** 10の扉のラウンド。ロビーでは null。itoのカード・列とは別に持つ */
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
@@ -89,6 +90,10 @@ export class Room {
   revealed = 0;
   lastActiveAt = Date.now();
   revealTimer: NodeJS.Timeout | null = null;
+  /** 10の扉の制限時間の締切。発火時に同じラウンドの質問の段階かを確かめるので、終了・中止の経路では止めない */
+  private doorsTimer: NodeJS.Timeout | null = null;
+  /** 時間切れの処理が済んだあとの配信 (server/index.ts が入れる) */
+  onDoorsTimeUp: (() => void) | null = null;
 
   constructor(code: string) {
     this.code = code;
@@ -155,6 +160,7 @@ export class Room {
     if (!this.doors) return;
     this.doors.refresh(this.seats());
     this.phase = this.doors.phase;
+    this.syncDoorsTimer();
   }
 
   /** GMが猶予を過ぎても切断したままなら、ラウンドを中止する (答えを知らない人へGMを移せないため) */
@@ -164,6 +170,7 @@ export class Room {
     if (gm && (gm.connected || now - (gm.awaySince ?? now) < GM_GRACE_MS)) return false;
     this.doors.abort('GMが30秒以上切断しました');
     this.phase = this.doors.phase;
+    this.stopDoorsTimer();
     return true;
   }
 
@@ -258,6 +265,7 @@ export class Room {
     if (typeof p.gmId === 'string' && (p.gmId === '' || this.players.some((x) => x.id === p.gmId))) next.gmId = p.gmId;
     if (isIndex(p.questions, LIMITS.doorsMaxQuestions) && p.questions >= 1) next.questions = p.questions;
     if (isIndex(p.maxLies, LIMITS.doorsMaxLies)) next.maxLies = p.maxLies;
+    if (typeof p.timeLimitMin === 'number' && DOORS_TIME_LIMITS.includes(p.timeLimitMin)) next.timeLimitMin = p.timeLimitMin;
     const model = DOORS_AI_MODELS.find((m) => m === p.aiModel);
     if (model) next.aiModel = model;
     this.doorsSettings = next;
@@ -280,18 +288,48 @@ export class Room {
     if (this.doorsSettings.gmPick === 'ai') {
       if (!isAskConfigured()) throw new GameError('ASK APIの設定が無いため、AIはGMを務められません');
       // 答えは server/index.ts が AI に決めさせる。決まるまでは doors-setup のまま
-      this.doors = new DoorsRound(AI_GM_ID, this.doorsSettings.questions, this.doorsSettings.maxLies);
+      this.doors = new DoorsRound(AI_GM_ID, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs());
       this.round += 1;
       this.notice = 'AIがGMです';
       this.phase = this.doors.phase;
       return;
     }
     const gm = this.pickGm(seated);
-    this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies);
+    this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs());
     this.lastGmId = gm.id;
     this.round += 1;
     this.notice = `${gm.name} さんがGMです`;
     this.phase = this.doors.phase;
+  }
+
+  private timeLimitMs(): number {
+    return this.doorsSettings.timeLimitMin * DOORS_MINUTE_MS;
+  }
+
+  /** 質問の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
+  private syncDoorsTimer(): void {
+    this.stopDoorsTimer();
+    const round = this.doors;
+    if (!round || round.phase !== 'doors-asking' || round.isTimeUp || round.deadlineAt <= 0) return;
+    this.doorsTimer = setTimeout(() => {
+      this.doorsTimer = null;
+      // 別のラウンドに替わっていたり、質問の段階でなくなっていたりしたら何もしない
+      if (this.doors !== round || round.phase !== 'doors-asking') return;
+      if (Date.now() < round.deadlineAt) return this.syncDoorsTimer();
+      round.expire();
+      this.phase = round.phase;
+      this.syncDoorsTimer();
+      try {
+        this.onDoorsTimeUp?.();
+      } catch (e) {
+        console.error('doors time-up broadcast failed', e);
+      }
+    }, Math.max(0, round.deadlineAt - Date.now()));
+  }
+
+  stopDoorsTimer(): void {
+    if (this.doorsTimer) clearTimeout(this.doorsTimer);
+    this.doorsTimer = null;
   }
 
   /** 10の扉の操作を実行し、ラウンドのフェーズを部屋へ写す */
@@ -299,6 +337,7 @@ export class Room {
     if (this.mode !== 'doors' || !this.doors) throw new GameError('10の扉のラウンド中ではありません');
     fn(this.doors, this.seats());
     this.phase = this.doors.phase;
+    this.syncDoorsTimer();
   }
 
   pickCandidate(playerId: string, index: unknown): void {
@@ -343,6 +382,7 @@ export class Room {
     if (this.doors?.isRunning) {
       this.doors.abort('ホストが中止しました');
       this.phase = this.doors.phase;
+      this.stopDoorsTimer();
       return;
     }
     this.stopReveal();
@@ -359,6 +399,7 @@ export class Room {
     round.setAiAnswer(answer, memo);
     this.aiAnswers = [...this.aiAnswers, answer].slice(-AI_ANSWER_MEMORY);
     this.phase = round.phase;
+    this.syncDoorsTimer();
   }
 
   /** AI GMが答えを決められなかった。ロビーへ戻して知らせる (内蔵リストへは切り替えない) */

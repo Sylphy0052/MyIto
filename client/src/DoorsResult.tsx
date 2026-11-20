@@ -31,7 +31,8 @@ function logText(view: RoomView, doors: DoorsView): string {
     return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}${corrected}${reason}`;
   });
   const gm = doors.isAiGm ? ['GM: AI'] : [];
-  return [`10の扉 テーマ: ${view.topic}`, ...gm, `答え: ${doors.answer || '(答えを決める前に中止)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
+  const limit = doors.timeLimitMin > 0 ? [`制限時間: ${doors.timeLimitMin}分${doors.wasTimeUp ? ' (時間切れあり)' : ''}`] : [];
+  return [`10の扉 テーマ: ${view.topic}`, ...gm, ...limit, `答え: ${doors.answer || '(答えを決める前に中止)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
 }
 
 interface Props {
@@ -104,6 +105,11 @@ export function DoorsResult({ view, doors, isHost, act, isJustFinished }: Props)
             ))}
           </m.ul>
         </div>
+      )}
+      {doors.timeLimitMin > 0 && (
+        <p className="muted">
+          制限時間: {doors.timeLimitMin}分{doors.wasTimeUp && ' (時間切れあり)'}
+        </p>
       )}
       <ol className="doors-log result-log">
         {doors.proposals.map((p) => (

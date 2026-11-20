@@ -44,6 +44,9 @@ interface Proposal {
   reason: string;
 }
 
+/** 時間の1分。画面確認で縮めるため環境変数で変えられる */
+export const DOORS_MINUTE_MS = Number(process.env.DOORS_MINUTE_MS) > 0 ? Number(process.env.DOORS_MINUTE_MS) : 60_000;
+
 /** AIがGMのときの gmId。プレイヤーのIDは UUID なので重ならない */
 export const AI_GM_ID = 'ai';
 
@@ -89,6 +92,12 @@ export class DoorsRound {
   correctSeq = 0;
   /** 最後に訂正した提案の通し番号 */
   correctSeqBy = 0;
+  /** 質問の段階の締切 (epoch ms)。制限時間なし・答えの確定前は 0 */
+  deadlineAt = 0;
+  /** 時間切れで質問の段階を打ち切っている間 true。延長で下ろす */
+  isTimeUp = false;
+  /** 一度でも時間切れになったか */
+  wasTimeUp = false;
   /** AI GMの事実メモ。サーバだけが持ち、どのクライアントにも送らない */
   memo = '';
   /** AI GMが答えを決めている、または提案に答えている最中か。お題生成の aiBusy とは別に持つ */
@@ -107,6 +116,8 @@ export class DoorsRound {
     readonly gmId: string,
     public limit: number,
     readonly maxLies: number,
+    /** 制限時間 (ミリ秒)。0 はなし */
+    readonly timeLimitMs = 0,
   ) {
     this.baseLimit = limit;
   }
@@ -159,6 +170,11 @@ export class DoorsRound {
     if (this.approvers(p, seats).every((s) => p.approverIds.includes(s.id))) p.status = 'sent';
   }
 
+  /** 答えが決まって質問の段階に入った時点から数える */
+  private startClock(): void {
+    if (this.timeLimitMs > 0) this.deadlineAt = Date.now() + this.timeLimitMs;
+  }
+
   // ---- GMの答え ----
 
   setAnswer(playerId: string, answer: string): void {
@@ -167,6 +183,7 @@ export class DoorsRound {
     if (!answer) throw new GameError('答えを入力してください');
     this.answer = answer;
     this.phase = 'doors-asking';
+    this.startClock();
     this.settle();
   }
 
@@ -175,6 +192,7 @@ export class DoorsRound {
   propose(playerId: string, seats: readonly Seat[], kind: unknown, text: string): void {
     this.requirePlaying();
     const seat = this.requireRespondent(playerId, seats);
+    if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
     if (!text) throw new GameError('内容を入力してください');
     if (this.proposals.length >= LIMITS.doorsLog) throw new GameError('ログが上限に達しました');
     const isFinal = this.phase === 'doors-final';
@@ -212,6 +230,7 @@ export class DoorsRound {
   approve(playerId: string, seats: readonly Seat[], id: unknown): void {
     this.requirePlaying();
     const seat = this.requireRespondent(playerId, seats);
+    if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
     const p = this.find(id);
     if (p.status !== 'proposed') throw new GameError('この提案は承認待ちではありません');
     if (p.authorId === playerId) throw new GameError('自分の提案は承認できません');
@@ -311,6 +330,7 @@ export class DoorsRound {
     this.memo = memo;
     this.aiBusy = false;
     this.phase = 'doors-asking';
+    this.startClock();
     this.settle();
   }
 
@@ -411,11 +431,8 @@ export class DoorsRound {
     if (delta === 1) {
       if (this.limit >= LIMITS.doorsMaxTotal) throw new GameError(`質問回数は${LIMITS.doorsMaxTotal}回までです`);
       this.limit += 1;
-      if (this.phase === 'doors-final') {
-        // 出ている最終解答は、質問フェーズの解答として扱い直す (回数の枠に収まる)
-        for (const p of this.proposals) if (isActive(p)) p.isFinal = false;
-        this.phase = 'doors-asking';
-      }
+      // 時間切れの間は回数だけ増やす。質問へ戻るには時間の延長も要る
+      if (this.phase === 'doors-final' && !this.isTimeUp) this.backToAsking();
       return;
     }
     if (delta === -1) {
@@ -428,11 +445,51 @@ export class DoorsRound {
     throw new GameError('延長の値が正しくありません');
   }
 
+  /** 最終解答の段階から質問の段階へ戻す。出ている最終解答は、質問の段階の解答として扱い直す (回数の枠に収まる) */
+  private backToAsking(): void {
+    for (const p of this.proposals) if (isActive(p)) p.isFinal = false;
+    this.phase = 'doors-asking';
+    // 戻した時点で締切を過ぎていれば、その場で時間切れにする
+    if (this.deadlineAt > 0 && Date.now() >= this.deadlineAt) this.expire();
+  }
+
+  /** 時間を1分延ばす。時間切れのあとなら時間切れを解き、回数が残っていれば質問の段階へ戻す */
+  extendTime(canExtend: boolean): void {
+    if (!canExtend) throw new GameError('延長はホストかGMだけが操作できます');
+    this.requirePlaying();
+    if (this.timeLimitMs <= 0) throw new GameError('制限時間がありません');
+    const now = Date.now();
+    if (this.isTimeUp) {
+      this.isTimeUp = false;
+      this.deadlineAt = now + DOORS_MINUTE_MS;
+      if (this.phase === 'doors-final' && this.used < this.limit) this.backToAsking();
+      return;
+    }
+    const next = Math.max(this.deadlineAt, this.phase === 'doors-final' ? now : 0) + DOORS_MINUTE_MS;
+    if (next - now > LIMITS.doorsMaxTimeLeftMin * DOORS_MINUTE_MS) {
+      throw new GameError(`残り時間は${LIMITS.doorsMaxTimeLeftMin}分までです`);
+    }
+    this.deadlineAt = next;
+  }
+
+  /** 時間切れ。質問の段階のときだけ処理する。承認待ちを取り消し、届いている提案が片付けば最終解答の段階へ進む */
+  expire(): void {
+    if (this.phase !== 'doors-asking' || this.isTimeUp) return;
+    this.isTimeUp = true;
+    this.wasTimeUp = true;
+    for (const p of this.proposals) {
+      if (p.status !== 'proposed') continue;
+      p.status = 'cancelled';
+      p.cancelledByName = '(時間切れ)';
+    }
+    this.settle();
+  }
+
   // ---- 進行 ----
 
   /** 回数を使い切り、処理中の提案が無くなったら最終解答へ進む */
   private settle(): void {
-    if (this.phase === 'doors-asking' && this.used >= this.limit && this.activeCount() === 0) {
+    if (this.phase === 'doors-asking' && (this.used >= this.limit || this.isTimeUp) && this.activeCount() === 0) {
       this.phase = 'doors-final';
     }
   }
@@ -523,6 +580,10 @@ export class DoorsRound {
       extendRequestBy: this.extendRequestBy,
       correctSeq: this.correctSeq,
       correctSeqBy: this.correctSeqBy,
+      timeLimitMin: Math.round(this.timeLimitMs / DOORS_MINUTE_MS),
+      timeLeftMs: this.deadlineAt > 0 && this.phase === 'doors-asking' ? Math.max(0, this.deadlineAt - Date.now()) : null,
+      isTimeUp: this.isTimeUp,
+      wasTimeUp: this.wasTimeUp,
     };
   }
 
