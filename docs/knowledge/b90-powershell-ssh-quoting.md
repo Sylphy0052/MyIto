@@ -15,12 +15,15 @@ updated: 2026-11-20
 ## なぜ
 
 - 外側の`-Command "..."`はPowerShellが先に解釈する。`&&`はPowerShell 5.1の区切りではなく、入れ子の引用符も外側で崩れる
-- `;`で区切るのは、`'...'`の内側にある限りリモートのシェルへ届くので通る。壊れたのは`&&`と二重引用符の入れ子だった
+- 壊れたのは`&&`と二重引用符の入れ子だった。`'...'`の内側の`;`は、リモートのシェルへ届いて通った (`cd ~/MyIto-live; git log --oneline | head -3; ls -a`で確認)
 
 ## どうするか
 
 - リモートのコマンドは`'`の内側に置き、区切りは`;`にする。`&&`と二重引用符は使わない
 - 失敗したら、コマンドを1つずつ別の呼び出しに分ける
 - `docker inspect --format`のtemplateは引用符で囲まず、空白を含まない形で渡す (例: `--format {{.HostConfig.RestartPolicy.Name}}_{{.Config.Cmd}}`)
-- `.env`をコマンドに書くとhookに拒否される ([b90-trial-run-with-env](b90-trial-run-with-env.md))。環境変数の名前を見たいときは、`docker inspect`の出力を取らずに、起動に使ったcompose.yamlを読む
 - 接続できない場合は [b90-ssh-from-wsl](b90-ssh-from-wsl.md) を見る
+
+## 補足
+
+- コンテナの環境変数を`docker inspect`の`Config`から取り出すコマンドは、hookに拒否された (`sensitive path access blocked`。[b90-trial-run-with-env](b90-trial-run-with-env.md)と同じhook)。環境変数の名前は、起動に使ったcompose.yamlを読んで調べる

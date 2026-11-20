@@ -15,13 +15,13 @@ updated: 2026-11-20
 ## なぜ
 
 - 起動方法はコンテナのラベル (`com.docker.compose.project`・`working_dir`・`oneoff`) から分かる。compose.yamlには書かれていない
-- accept4のエラーは、WSLからb90へのsshの接続が不安定なために、手元の側で出たとみている (未確認)。`docker rm -f`と起動の間にあるので、失敗すると公開が止まる
+- accept4のエラーはWSL側で出たもので、原因は未確認。同じコマンドの再実行で通った
 
 ## どうするか
 
-1. 先にビルドする。旧コンテナは動かしたまま、`~/MyIto-live`で`git fetch origin --prune`、`git switch -c live-mainN origin/main`、`docker compose -p myito-live build`を順に実行する (未追跡の`live-*.mts`は残る)
-2. ビルドが通ってから、`docker rm -f myito-live-app`と上の`compose run`を続けて実行する。止まる時間を短くするため、2つの間に別の作業を挟まない
+1. 先にビルドする。旧コンテナは動かしたまま、`~/MyIto-live`で`git fetch origin --prune`、`git switch -c live-main<次の番号> origin/main` (ブランチ名は`git branch`で既存の最大番号を見て決める)、`docker compose -p myito-live build`を順に実行する (未追跡の`live-*.mts`は残る)
+2. ビルドが通ってから、`docker rm -f myito-live-app`と上の`compose run`を続けて実行する。`rm`のあと`run`が失敗すると公開が止まるので、2つの間に別の作業を挟まない
 3. `compose run`が失敗したら、`docker ps -a --filter name=myito-live`でコンテナの有無を確かめてから、同じコマンドを再実行する
 4. `docker ps`でUp、`curl http://localhost:47214/`で200、`docker exec myito-live-app grep -c <新機能の名前> server/game.ts`で新しい版であることを確かめる
 5. 進行中のルームはメモリ上にあり、入れ替えで切れる。入れ替える前に、使っている人がいないかユーザーに確かめる
-- ssh越しの書き方は [b90-powershell-ssh-quoting](b90-powershell-ssh-quoting.md) を見る
+関連: ssh越しの書き方は [b90-powershell-ssh-quoting](b90-powershell-ssh-quoting.md) を見る
