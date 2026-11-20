@@ -197,6 +197,15 @@ check('GM以外に訂正の通知が出る', (await Promise.all(resp.map((p) => 
 await shotAll('06b-corrected', [gm, rc]);
 await gmCorrect(q1, 'どちらかといえばYes', true);
 check('別の質問を嘘に訂正すると、嘘の残りが 0 になる', await until(gm.getByText('残りの嘘: 0').first().waitFor({ timeout: 5000 })));
+// 判定は同じで嘘だけを付け外しする訂正は、回答者の画面に表示も通知も出ない
+await gmCorrect(q1, 'どちらかといえばYes', false);
+check('嘘だけを外す訂正で、嘘の残りが 1 に戻る', await until(gm.getByText('残りの嘘: 1').first().waitFor({ timeout: 5000 })));
+await gmCorrect(q1, 'どちらかといえばYes', true);
+check('嘘だけを付け直す訂正で、嘘の残りが 0 に戻る', await until(gm.getByText('残りの嘘: 0').first().waitFor({ timeout: 5000 })));
+await rb.waitForTimeout(500);
+check('判定が変わらない訂正は、回答者に「X → X」の表示を出さず、通信にも嘘の印が出ない',
+  (await Promise.all(resp.map(async (p) => (await logItem(p, q1).getByText(/訂正: どちらかといえばYes → どちらかといえばYes/).count()) === 0))).every(Boolean) &&
+  !resp.some((p) => p.frames_.some((f) => f.includes('"lie":true'))));
 check('嘘の付け外しを訂正しても、嘘の印は回答者への通信に含まれない', !resp.some((p) => p.frames_.some((f) => f.includes('"lie":true'))));
 check('訂正しても残り回数は変わらない (最終解答の段階のまま)', await until(ra.getByText(/最終解答/).first().waitFor({ timeout: 3000 })));
 

@@ -277,11 +277,17 @@ export class DoorsRound {
     }
     if (reply === p.reply && isLie === p.lie) throw new GameError('いまと同じ判定です');
     this.liesUsed += (isLie ? 1 : 0) - (p.lie ? 1 : 0);
-    p.correctedFrom ??= p.reply;
+    const isReplyChanged = reply !== p.reply;
+    if (isReplyChanged) p.correctedFrom ??= p.reply;
     p.reply = reply as DoorsReply;
     p.lie = isLie;
-    this.correctSeq += 1;
-    this.correctSeqBy = p.seq;
+    // 最初の判定へ戻したら訂正の表示を消す (「Yes → Yes」を出さない)
+    if (p.correctedFrom === p.reply) p.correctedFrom = null;
+    // 嘘の付け外しだけの訂正は、回答者から見える判定が変わらないので通知しない (嘘が推測されるため)
+    if (isReplyChanged) {
+      this.correctSeq += 1;
+      this.correctSeqBy = p.seq;
+    }
     if (p.kind === 'guess' && reply === 'correct') this.finish('win');
   }
 
