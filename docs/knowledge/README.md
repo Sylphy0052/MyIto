@@ -9,3 +9,5 @@
 - [Issueの前提は実画面で確かめてから起票する](issue-premise-check-existing-ui.md) — #25は既に実装済みの表示を直す前提だった
 - [検証サーバーでAIモードが使えない](e2e-ai-mode-env.md) — `npm start`は環境変数のファイルを読まない。`ASK_*`を渡す
 - [計算機サーバでPlaywrightの画面確認を回す](e2e-playwright-docker-on-compute-server.md) — 公式imageを非rootで回すときは`HOME`と`TMPDIR=/tmp`を明示する
+- [powershell.exe経由のsshで複数コマンドが壊れる](b90-powershell-ssh-quoting.md) — `&&`と二重引用符の入れ子を避け、1コマンドずつ分ける
+- [b90の公開コンテナを入れ替える](b90-redeploy-live-container.md) — ~/MyIto-liveでビルドしてcompose runで単発起動。1回目の起動が失敗することがある
