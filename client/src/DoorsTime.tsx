@@ -86,7 +86,7 @@ export function TimeUpNotice({ doors }: { doors: DoorsView }) {
 export function TurnLeft({ doors }: { doors: DoorsView }) {
   const received = doors.turnLeftMs;
   const isPaused = doors.isTurnPaused;
-  const base = useMemo(() => ({ left: received, at: performance.now() }), [received]);
+  const base = useMemo(() => ({ left: received, at: performance.now() }), [received, isPaused, doors.turnTimeoutCount]);
   const [now, setNow] = useState(() => performance.now());
   const isTicking = received !== null && !isPaused;
   useEffect(() => {

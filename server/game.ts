@@ -331,7 +331,7 @@ export class Room {
       } catch (e) {
         console.error('doors time-up broadcast failed', e);
       }
-    }, Math.max(0, deadline - Date.now()));
+    }, Math.max(1, deadline - Date.now()));
   }
 
   stopDoorsTimer(): void {

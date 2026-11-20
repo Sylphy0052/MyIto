@@ -319,7 +319,10 @@ export class DoorsRound {
     this.requirePlaying();
     const seat = this.requireRespondent(playerId, seats);
     if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
+    // 手番の締切が過ぎたのにタイマーが未発火の間の承認で、時間切れを逃れさせない
+    if (this.turnDeadlineAt > 0 && Date.now() >= this.turnDeadlineAt) this.fireDeadline();
     const p = this.find(id);
+    if (p.status === 'cancelled' && p.cancelledByName === '(手番の時間切れ)') return;
     if (p.status !== 'proposed') throw new GameError('この提案は承認待ちではありません');
     if (p.authorId === playerId) throw new GameError('自分の提案は承認できません');
     if (p.approverIds.includes(playerId)) throw new GameError('もうOKしています');
