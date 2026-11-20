@@ -30,7 +30,7 @@ function logText(view: RoomView, doors: DoorsView): string {
     return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}${reason}`;
   });
   const gm = doors.isAiGm ? ['GM: AI'] : [];
-  return [`10の扉 テーマ: ${view.topic}`, ...gm, `答え: ${doors.answer || '(未決定)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
+  return [`10の扉 テーマ: ${view.topic}`, ...gm, `答え: ${doors.answer || '(答えを決める前に中止)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
 }
 
 interface Props {
@@ -90,7 +90,7 @@ export function DoorsResult({ view, doors, isHost, act, isJustFinished }: Props)
       <h2 className={isWin ? 'perfect' : undefined}>{outcomeLabel(doors)}</h2>
       <div className="answer-reveal">
         <span className="label">答え</span>
-        <span className={`secret-card ${isJustFinished ? 'flip' : ''}`}>{doors.answer || '(未決定)'}</span>
+        <span className={`secret-card ${isJustFinished ? 'flip' : ''}`}>{doors.answer || '(答えを決める前に中止)'}</span>
       </div>
       {lies.length > 0 && (
         <div className="lie-reveal">

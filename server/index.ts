@@ -146,7 +146,9 @@ function aiHistory(round: DoorsRound): HistoryItem[] {
 
 /** 表記の正規化で答えと一致すれば、AIに聞かずに正解にする */
 async function judge(secret: SecretAnswer, guess: string): Promise<Judgement> {
-  if (normalizeText(guess) === normalizeText(secret.answer)) {
+  const key = normalizeText(guess);
+  // 正規化で空になる (記号だけの) 解答・答えは完全一致にせず、AIの判定に回す
+  if (key !== '' && key === normalizeText(secret.answer)) {
     return { verdict: 'correct', reason: '表記をそろえると答えと一致しました' };
   }
   return judgeGuess(secret, guess);
