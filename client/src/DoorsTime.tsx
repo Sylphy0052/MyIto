@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import type { DoorsView } from '../../shared/types';
 import { playChime, useSoundSetting } from './sound';
@@ -19,13 +19,9 @@ function formatLeft(ms: number): string {
  */
 export function TimeLeft({ doors }: { doors: DoorsView }) {
   const received = doors.timeLeftMs;
-  // 受け取った値と、そのとき手元で測った時刻。新しい状態が届くたびに更新する
-  const base = useRef({ left: received, at: performance.now() });
+  // 受け取った値と、そのとき手元で測った時刻。新しい値が届いたその描画で基準を替える (古い基準で1回描かない)
+  const base = useMemo(() => ({ left: received, at: performance.now() }), [received]);
   const [now, setNow] = useState(() => performance.now());
-  useEffect(() => {
-    base.current = { left: received, at: performance.now() };
-    setNow(performance.now());
-  }, [received]);
   const isTicking = received !== null && !doors.isTimeUp;
   useEffect(() => {
     if (!isTicking) return;
@@ -35,7 +31,7 @@ export function TimeLeft({ doors }: { doors: DoorsView }) {
 
   if (received === null || doors.timeLimitMin === 0) return null;
   if (doors.isTimeUp) return <span className="time-left is-up">時間切れ</span>;
-  const left = Math.max(0, (base.current.left ?? received) - (now - base.current.at));
+  const left = Math.max(0, (base.left ?? received) - (Math.max(now, base.at) - base.at));
   const tone = left <= URGENT_MS ? 'is-urgent' : left <= WARN_MS ? 'is-warn' : '';
   return (
     <span className={`time-left ${tone}`} role="timer" aria-label={`残り時間 ${formatLeft(left)}`}>
@@ -47,6 +43,9 @@ export function TimeLeft({ doors }: { doors: DoorsView }) {
 /** 時間切れを知らせる。再接続・リロード直後は出さない。通知音をオンにしている人だけ鳴らす */
 export function TimeUpNotice({ doors }: { doors: DoorsView }) {
   const [isSoundOn] = useSoundSetting();
+  // 音の設定は鳴らす瞬間に読むだけ。依存に入れると、切り替えたときに消すタイマーが外れて通知が出たままになる
+  const isSoundOnRef = useRef(isSoundOn);
+  isSoundOnRef.current = isSoundOn;
   const wasUp = useRef(doors.isTimeUp);
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -57,10 +56,14 @@ export function TimeUpNotice({ doors }: { doors: DoorsView }) {
       return;
     }
     setShown((n) => n + 1);
-    if (isSoundOn) playChime();
+    if (isSoundOnRef.current) playChime();
+  }, [doors.isTimeUp]);
+  // 出してから一定時間で消す。出し直したら数え直す
+  useEffect(() => {
+    if (shown === 0) return;
     const timer = window.setTimeout(() => setShown(0), TIME_UP_NOTICE_MS);
     return () => window.clearTimeout(timer);
-  }, [doors.isTimeUp, isSoundOn]);
+  }, [shown]);
   return (
     <AnimatePresence>
       {shown > 0 && (

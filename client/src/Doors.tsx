@@ -237,8 +237,14 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
 
       {isFinal && (
         <p className="final-guide">
-          質問回数を使い切りました。回答者は最終解答を1回だけ出せます (承認の流れは同じ)。
-          {canExtend ? 'あなたは「延長 +1」で質問フェーズへ戻せます。' : 'ホストかGMは「延長 +1」で質問フェーズへ戻せます。'}
+          {doors.isTimeUp ? '時間切れです。' : '質問回数を使い切りました。'}回答者は最終解答を1回だけ出せます (承認の流れは同じ)。
+          {doors.isTimeUp
+            ? canExtend
+              ? ''
+              : 'ホストかGMは時間を延ばして質問フェーズへ戻せます。'
+            : canExtend
+              ? 'あなたは「延長 +1」で質問フェーズへ戻せます。'
+              : 'ホストかGMは「延長 +1」で質問フェーズへ戻せます。'}
         </p>
       )}
 

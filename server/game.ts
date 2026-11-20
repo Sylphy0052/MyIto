@@ -160,6 +160,7 @@ export class Room {
     if (!this.doors) return;
     this.doors.refresh(this.seats());
     this.phase = this.doors.phase;
+    this.syncDoorsTimer();
   }
 
   /** GMが猶予を過ぎても切断したままなら、ラウンドを中止する (答えを知らない人へGMを移せないため) */
@@ -169,6 +170,7 @@ export class Room {
     if (gm && (gm.connected || now - (gm.awaySince ?? now) < GM_GRACE_MS)) return false;
     this.doors.abort('GMが30秒以上切断しました');
     this.phase = this.doors.phase;
+    this.stopDoorsTimer();
     return true;
   }
 
@@ -380,6 +382,7 @@ export class Room {
     if (this.doors?.isRunning) {
       this.doors.abort('ホストが中止しました');
       this.phase = this.doors.phase;
+      this.stopDoorsTimer();
       return;
     }
     this.stopReveal();

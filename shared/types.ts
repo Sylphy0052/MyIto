@@ -20,6 +20,8 @@ export const LIMITS = {
   doorsMaxQuestions: 30,
   /** 10の扉: 延長を含めた質問回数の上限 */
   doorsMaxTotal: 99,
+  /** 10の扉: 延長を含めた残り時間の上限 (分) */
+  doorsMaxTimeLeftMin: 99,
   doorsMaxLies: 3,
   /** 10の扉: 1人が同時に出せる承認待ちの数 */
   doorsPendingPerPlayer: 2,

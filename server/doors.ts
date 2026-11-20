@@ -465,7 +465,11 @@ export class DoorsRound {
       if (this.phase === 'doors-final' && this.used < this.limit) this.backToAsking();
       return;
     }
-    this.deadlineAt = Math.max(this.deadlineAt, this.phase === 'doors-final' ? now : 0) + DOORS_MINUTE_MS;
+    const next = Math.max(this.deadlineAt, this.phase === 'doors-final' ? now : 0) + DOORS_MINUTE_MS;
+    if (next - now > LIMITS.doorsMaxTimeLeftMin * DOORS_MINUTE_MS) {
+      throw new GameError(`残り時間は${LIMITS.doorsMaxTimeLeftMin}分までです`);
+    }
+    this.deadlineAt = next;
   }
 
   /** 時間切れ。質問の段階のときだけ処理する。承認待ちを取り消し、届いている提案が片付けば最終解答の段階へ進む */
