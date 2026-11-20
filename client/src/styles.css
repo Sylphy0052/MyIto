@@ -1230,8 +1230,14 @@ button.ai-busy {
 .log-text {
   overflow-wrap: anywhere;
 }
+.correct-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--sp-2);
+}
 .log-result {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
 }

@@ -27,7 +27,8 @@ function logText(view: RoomView, doors: DoorsView): string {
   const lines = doors.proposals.map((p) => {
     const result = p.reply ? REPLY_LABEL[p.reply] : STATUS_LABEL[p.status];
     const reason = p.reason ? ` (理由: ${p.reason})` : '';
-    return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}${reason}`;
+    const corrected = p.correctedFrom ? ` (訂正: ${REPLY_LABEL[p.correctedFrom]} → ${result})` : '';
+    return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}${corrected}${reason}`;
   });
   const gm = doors.isAiGm ? ['GM: AI'] : [];
   return [`10の扉 テーマ: ${view.topic}`, ...gm, `答え: ${doors.answer || '(答えを決める前に中止)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');

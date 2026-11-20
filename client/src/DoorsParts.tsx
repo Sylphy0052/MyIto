@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import type { DoorsReply, DoorsView, ProposalKind, ProposalStatus, ProposalView } from '../../shared/types';
 
@@ -23,6 +24,13 @@ export const REPLY_SYMBOL: Record<DoorsReply, string> = {
   close: '△',
   wrong: '×',
 };
+
+/** ラウンドが終わる判定 (解答の正解、最終解答への判定) は、押す前に確かめる */
+export function confirmReply(p: Pick<ProposalView, 'kind' | 'isFinal' | 'text'>, reply: DoorsReply): boolean {
+  if (p.kind !== 'guess' || (reply !== 'correct' && !p.isFinal)) return true;
+  const ends = reply === 'correct' ? '回答者の勝ちでラウンドが終わります' : 'ラウンドが終わります';
+  return window.confirm(`「${p.text}」を${REPLY_LABEL[reply]}にします。${ends}。よろしいですか?`);
+}
 
 export const STATUS_LABEL: Record<ProposalStatus, string> = {
   proposed: '承認待ち',
@@ -121,7 +129,7 @@ export function DoorRow({ doors, isFinal }: { doors: DoorsView; isFinal: boolean
 }
 
 /** ログの1行。通し番号、提案者、質問/解答の別、回答や処理の結果 */
-export function LogRow({ p, showLie }: { p: ProposalView; showLie: boolean }) {
+export function LogRow({ p, showLie, action }: { p: ProposalView; showLie: boolean; action?: ReactNode }) {
   return (
     <>
       <span className="log-seq">{p.seq}</span>
@@ -133,6 +141,12 @@ export function LogRow({ p, showLie }: { p: ProposalView; showLie: boolean }) {
       <span className="log-result">
         {p.reply ? <ReplyBadge reply={p.reply} /> : <span className={`status-tag status-${p.status}`}>{STATUS_LABEL[p.status]}</span>}
         {showLie && p.lie && <span className="lie-tag">嘘</span>}
+        {p.correctedFrom && p.reply && (
+          <small className="muted corrected-tag">
+            訂正: {REPLY_LABEL[p.correctedFrom]} → {REPLY_LABEL[p.reply]}
+          </small>
+        )}
+        {action}
         {p.status === 'cancelled' && p.cancelledByName && <small className="muted"> ({p.cancelledByName})</small>}
         {p.reason && <small className="muted reply-reason"> {p.reason}</small>}
       </span>
