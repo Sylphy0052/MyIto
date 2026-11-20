@@ -1,6 +1,9 @@
 {
   "name": "myito",
   "private": true,
+  "engines": {
+    "node": ">=20.12"
+  },
   "type": "module",
   "scripts": {
     "dev:server": "tsx watch server/index.ts",
