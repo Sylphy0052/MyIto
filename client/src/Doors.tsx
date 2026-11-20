@@ -6,6 +6,7 @@ import type { Act } from './RoomScreen';
 import { DoorRow, LogRow, ReplyBadge, STATUS_LABEL, WaitingDoors, kindLabel } from './DoorsParts';
 import { CorrectPanel, GmQueue, SecretAnswer } from './DoorsGm';
 import { DoorsResult } from './DoorsResult';
+import { TimeLeft, TimeUpNotice } from './DoorsTime';
 import { playChime, useSoundSetting } from './sound';
 
 interface Props {
@@ -49,6 +50,7 @@ export function Doors({ view, isHost, act }: Props) {
           {isGm && <span className="you-tag">あなた</span>}
         </span>
         {view.phase !== 'doors-setup' && <DoorRow doors={doors} isFinal={view.phase === 'doors-final'} />}
+        {isRunning && <TimeLeft doors={doors} />}
         {doors.maxLies > 0 && !isGm && isRunning && (
           <span className="lie-notice">
             {doors.isAiGm ? 'AI' : 'GM'}は最大{doors.maxLies}回嘘をつくことがあります
@@ -57,6 +59,7 @@ export function Doors({ view, isHost, act }: Props) {
       </div>
       <ExtendRequestNotice doors={doors} canSee={isHost || isGm} />
       {isRunning && <CorrectNotice doors={doors} canSee={!isGm} />}
+      {isRunning && <TimeUpNotice doors={doors} />}
       {isRunning && doors.isAiGm && <AiStatus doors={doors} isHost={isHost} act={act} />}
       {isGm && isRunning && doors.answer && <SecretAnswer answer={doors.answer} />}
       {/* フェーズが切り替わっても、直前の回答を出し続けるため外に置く */}
@@ -239,6 +242,10 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
         </p>
       )}
 
+      {doors.isTimeUp && canExtend && (
+        <p className="final-guide">時間切れのため、質問へ戻るには「時間 +1分」で時間も延ばす必要があります (回数を足すだけでは戻りません)。</p>
+      )}
+
       <div className="doors-columns">
         {isGm ? <GmQueue doors={doors} act={act} /> : <ProposalForm view={view} doors={doors} isFinal={isFinal} act={act} />}
         <ActiveList view={view} doors={doors} active={isGm ? active.filter((p) => p.status === 'proposed') : active} isGm={isGm} act={act} />
@@ -254,6 +261,11 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
             <button className={`small ${isFinal ? 'primary' : ''}`} onClick={() => act('doors:extend', { delta: 1 })}>
               延長 +1
             </button>
+            {doors.timeLimitMin > 0 && (
+              <button className={`small ${doors.isTimeUp ? 'primary' : ''}`} onClick={() => act('doors:extend-time')}>
+                時間 +1分
+              </button>
+            )}
           </span>
         )}
         {!isGm && !canExtend && (

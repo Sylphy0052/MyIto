@@ -266,6 +266,7 @@ io.on('connection', (socket: GameSocket) => {
       return ack({ ok: false, error: errorMessage(e) });
     }
     const room = new Room(code);
+    room.onDoorsTimeUp = () => broadcast(room);
     rooms.set(room.code, room);
     enter(socket, room, name, undefined, ack);
   });
@@ -396,6 +397,10 @@ io.on('connection', (socket: GameSocket) => {
     ),
   );
   socket.on(
+    'doors:extend-time',
+    withRoom(socket, (room, pid) => room.doorsAction((d) => d.extendTime(pid === room.hostId || pid === d.gmId))),
+  );
+  socket.on(
     'doors:ai-retry',
     withRoom(socket, (room, pid) => room.doorsAction((d) => d.retryAi(pid === room.hostId))),
   );
@@ -412,6 +417,7 @@ setInterval(() => {
   for (const [code, room] of rooms) {
     if (!room.hasConnected() && now - room.lastActiveAt > ROOM_IDLE_MS) {
       room.stopReveal();
+      room.stopDoorsTimer();
       rooms.delete(code);
     }
   }

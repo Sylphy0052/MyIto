@@ -28,6 +28,8 @@ export const LIMITS = {
 } as const;
 
 export const DOORS_DEFAULT_QUESTIONS = 10;
+/** ラウンドの制限時間 (分)。0 はなし */
+export const DOORS_TIME_LIMITS: readonly number[] = [0, 3, 5, 10, 15, 20, 30];
 
 export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
   return phase.startsWith('doors-');
@@ -60,6 +62,8 @@ export interface DoorsSettings {
   gmId: string;
   questions: number;
   maxLies: number;
+  /** ラウンドの制限時間 (分)。0 はなし */
+  timeLimitMin: number;
   /** gmPick が ai のときに使うモデル */
   aiModel: DoorsAiModel;
 }
@@ -124,6 +128,14 @@ export interface DoorsView {
   correctSeq: number;
   /** 最後に訂正した提案の通し番号 */
   correctSeqBy: number;
+  /** 制限時間 (分)。0 はなし */
+  timeLimitMin: number;
+  /** 質問の段階の残りミリ秒。制限時間なし・答えの確定前・最終解答の段階・終了後は null。受け取った時点の値から手元で数え直す */
+  timeLeftMs: number | null;
+  /** 時間切れで、いまも質問の段階が打ち切られているか */
+  isTimeUp: boolean;
+  /** このラウンドで一度でも時間切れになったか (結果画面用) */
+  wasTimeUp: boolean;
 }
 
 export interface PlayerView {
