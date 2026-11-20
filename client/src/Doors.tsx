@@ -241,7 +241,9 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
           {doors.isTimeUp
             ? canExtend
               ? ''
-              : 'ホストかGMは時間を延ばして質問フェーズへ戻せます。'
+              : doors.used < doors.limit
+                ? 'ホストかGMは時間を延ばして質問フェーズへ戻せます。'
+                : 'ホストかGMは時間と回数を延ばして質問フェーズへ戻せます。'
             : canExtend
               ? 'あなたは「延長 +1」で質問フェーズへ戻せます。'
               : 'ホストかGMは「延長 +1」で質問フェーズへ戻せます。'}
@@ -249,7 +251,11 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
       )}
 
       {doors.isTimeUp && canExtend && (
-        <p className="final-guide">時間切れのため、質問へ戻るには「時間 +1分」で時間も延ばす必要があります (回数を足すだけでは戻りません)。</p>
+        <p className="final-guide">
+          {doors.used < doors.limit
+            ? '時間切れのため、質問へ戻るには「時間 +1分」で時間も延ばす必要があります (回数を足すだけでは戻りません)。'
+            : '時間切れで回数も使い切っています。質問へ戻るには「延長 +1」で回数を足し、「時間 +1分」で時間も延ばしてください。'}
+        </p>
       )}
 
       <div className="doors-columns">
