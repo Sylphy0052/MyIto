@@ -115,3 +115,40 @@ export function randomTopic(exclude?: string): string {
   const pool = BUILTIN_TOPICS.filter((t) => t !== exclude);
   return pool[Math.floor(Math.random() * pool.length)] ?? BUILTIN_TOPICS[0]!;
 }
+
+// 10の扉のテーマ。答えのカテゴリになるもの (itoのお題は尺度なので流用しない)
+export const DOORS_THEMES: readonly string[] = [
+  '動物',
+  '食べ物',
+  '飲み物',
+  '果物',
+  '野菜',
+  'お菓子',
+  '国',
+  '都道府県',
+  '乗り物',
+  'スポーツ',
+  '職業',
+  '楽器',
+  '家電',
+  '文房具',
+  '家具',
+  '植物',
+  '虫',
+  '海の生き物',
+  '鳥',
+  '体の部位',
+  '天気・自然現象',
+  '学校にあるもの',
+  'キッチンにあるもの',
+  'コンビニで売っているもの',
+  '遊園地にあるもの',
+  '有名な建物',
+  '昔話・童話の登場人物',
+  '道具',
+];
+
+export function randomDoorsTheme(exclude?: string): string {
+  const pool = DOORS_THEMES.filter((t) => t !== exclude);
+  return pool[Math.floor(Math.random() * pool.length)] ?? DOORS_THEMES[0]!;
+}

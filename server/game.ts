@@ -1,18 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import {
+  DOORS_DEFAULT_QUESTIONS,
   LIMITS,
   isReadyToOpen,
   type CardState,
+  type DoorsSettings,
+  type GameMode,
   type Phase,
   type RoomView,
   type TopicSource,
 } from '../shared/types';
-import { randomTopic } from './topics';
+import { randomDoorsTheme, randomTopic } from './topics';
+import { DoorsRound, type Seat } from './doors';
+import { GameError } from './errors';
+
+export { GameError };
 
 const MAX_VALUE = 100;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 const HOST_GRACE_MS = 30_000;
+export const GM_GRACE_MS = 30_000;
 
 interface Player {
   /** 全員に配信する公開ID */
@@ -31,8 +39,6 @@ interface Card {
   hint: string;
   state: CardState;
 }
-
-export class GameError extends Error {}
 
 export function cleanText(raw: unknown, max: number): string {
   if (typeof raw !== 'string') return '';
@@ -57,6 +63,12 @@ export class Room {
   readonly code: string;
   hostId = '';
   phase: Phase = 'lobby';
+  mode: GameMode = 'ito';
+  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0 };
+  /** 10の扉のラウンド。ロビーでは null。itoのカード・列とは別に持つ */
+  doors: DoorsRound | null = null;
+  /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
+  lastGmId = '';
   cardsPerPlayer = 1;
   topic = randomTopic();
   topicSource: TopicSource = 'random';
@@ -84,6 +96,7 @@ export class Room {
       existing.awaySince = null;
       if (name) existing.name = name;
       if (!this.hostId) this.hostId = existing.id;
+      this.refreshDoors();
       return existing;
     }
     // 席が外れた古い token で新しい席を作らない。クライアントはセッションを捨てて入り直す
@@ -96,14 +109,26 @@ export class Room {
     const player: Player = { id: randomUUID(), token: randomUUID(), name, connected: true, awaySince: null };
     this.players.push(player);
     if (!this.hostId || !this.players.some((p) => p.id === this.hostId)) this.hostId = player.id;
+    // 途中参加者は回答者に入る
+    this.refreshDoors();
     return player;
   }
 
-  /** 切断中で手札を持たないプレイヤーを席から外す (ホストは残す) */
+  /** 席を外してはいけないか (手札を持つ人、ラウンド中のGM) */
+  private holdsSeat(playerId: string): boolean {
+    return this.cards.some((c) => c.ownerId === playerId) || this.isRunningGm(playerId);
+  }
+
+  /** 進行中の10の扉のGMか */
+  isRunningGm(playerId: string): boolean {
+    return !!this.doors && this.doors.isRunning && this.doors.gmId === playerId;
+  }
+
+  /** 切断中で手札を持たないプレイヤーを席から外す (ホストとラウンド中のGMは残す) */
   private pruneAway(): void {
-    this.players = this.players.filter(
-      (p) => p.connected || p.id === this.hostId || this.cards.some((c) => c.ownerId === p.id),
-    );
+    const removed = this.players.filter((p) => !p.connected && p.id !== this.hostId && !this.holdsSeat(p.id));
+    this.players = this.players.filter((p) => !removed.includes(p));
+    for (const p of removed) this.doors?.dropAuthor(p.id);
   }
 
   setConnected(playerId: string, connected: boolean): void {
@@ -111,6 +136,28 @@ export class Room {
     if (!p) return;
     p.connected = connected;
     p.awaySince = connected ? null : Date.now();
+    this.refreshDoors();
+  }
+
+  private seats(): Seat[] {
+    return this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected }));
+  }
+
+  /** 人の出入りに合わせて10の扉の状態を判定し直す */
+  private refreshDoors(): void {
+    if (!this.doors) return;
+    this.doors.refresh(this.seats());
+    this.phase = this.doors.phase;
+  }
+
+  /** GMが猶予を過ぎても切断したままなら、ラウンドを中止する (答えを知らない人へGMを移せないため) */
+  abortIfGmAway(now = Date.now()): boolean {
+    if (!this.doors?.isRunning) return false;
+    const gm = this.players.find((p) => p.id === this.doors!.gmId);
+    if (gm && (gm.connected || now - (gm.awaySince ?? now) < GM_GRACE_MS)) return false;
+    this.doors.abort('GMが30秒以上切断しました');
+    this.phase = this.doors.phase;
+    return true;
   }
 
   /** ホストが猶予を過ぎても切断したままなら、接続中の別プレイヤーへホストを移す */
@@ -126,9 +173,11 @@ export class Room {
 
   /** 退室。手札を持っていなければ席を外し、持っていれば切断扱いにする */
   leave(playerId: string): void {
-    const holdsCards = this.cards.some((c) => c.ownerId === playerId);
-    if (holdsCards) this.setConnected(playerId, false);
-    else this.players = this.players.filter((p) => p.id !== playerId);
+    if (this.holdsSeat(playerId)) this.setConnected(playerId, false);
+    else {
+      this.players = this.players.filter((p) => p.id !== playerId);
+      this.doors?.dropAuthor(playerId);
+    }
     if (playerId === this.hostId) {
       const next = this.players.find((p) => p.connected && p.id !== playerId);
       if (next) {
@@ -138,6 +187,7 @@ export class Room {
         this.hostId = '';
       }
     }
+    this.refreshDoors();
   }
 
   hasConnected(): boolean {
@@ -169,6 +219,66 @@ export class Room {
     if (source !== 'ai') this.topicCandidates = [];
   }
 
+  /** 内蔵リストからお題 (10の扉ではテーマ) を出し直す */
+  randomizeTopic(playerId: string): void {
+    const pick = this.mode === 'doors' ? randomDoorsTheme : randomTopic;
+    this.setTopic(playerId, pick(this.topic), 'random');
+  }
+
+  /** ゲーム種別を切り替える。お題と候補は種別ごとに意味が違うので出し直す */
+  setMode(playerId: string, mode: unknown): void {
+    this.requireHost(playerId);
+    if (this.phase !== 'lobby') throw new GameError('ロビーでだけ変更できます');
+    if (this.aiBusy) throw new GameError('AIがお題を考え中です');
+    if (mode !== 'ito' && mode !== 'doors') throw new GameError('ゲームの種類が正しくありません');
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.topicCandidates = [];
+    this.topic = mode === 'doors' ? randomDoorsTheme() : randomTopic();
+    this.topicSource = 'random';
+    this.notice = '';
+  }
+
+  setDoorsSettings(playerId: string, p: Record<string, unknown>): void {
+    this.requireHost(playerId);
+    if (this.phase !== 'lobby') throw new GameError('ロビーでだけ変更できます');
+    const next = { ...this.doorsSettings };
+    if (p.gmPick === 'random' || p.gmPick === 'named') next.gmPick = p.gmPick;
+    if (typeof p.gmId === 'string' && (p.gmId === '' || this.players.some((x) => x.id === p.gmId))) next.gmId = p.gmId;
+    if (isIndex(p.questions, LIMITS.doorsMaxQuestions) && p.questions >= 1) next.questions = p.questions;
+    if (isIndex(p.maxLies, LIMITS.doorsMaxLies)) next.maxLies = p.maxLies;
+    this.doorsSettings = next;
+  }
+
+  /** 10の扉のGMを決める。決められなければ GameError */
+  private pickGm(seated: readonly Player[]): Player {
+    const { gmPick, gmId } = this.doorsSettings;
+    if (gmPick === 'named') {
+      const gm = seated.find((p) => p.id === gmId);
+      if (!gm) throw new GameError('指名したGMが接続していません。GMを指名し直してください');
+      return gm;
+    }
+    // 3人以上なら、直前のGMを候補から外す
+    const pool = seated.length >= 3 ? seated.filter((p) => p.id !== this.lastGmId) : seated;
+    return pool[Math.floor(Math.random() * pool.length)]!;
+  }
+
+  private startDoors(seated: readonly Player[]): void {
+    const gm = this.pickGm(seated);
+    this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies);
+    this.lastGmId = gm.id;
+    this.round += 1;
+    this.notice = `${gm.name} さんがGMです`;
+    this.phase = this.doors.phase;
+  }
+
+  /** 10の扉の操作を実行し、ラウンドのフェーズを部屋へ写す */
+  doorsAction(fn: (round: DoorsRound, seats: Seat[]) => void): void {
+    if (this.mode !== 'doors' || !this.doors) throw new GameError('10の扉のラウンド中ではありません');
+    fn(this.doors, this.seats());
+    this.phase = this.doors.phase;
+  }
+
   pickCandidate(playerId: string, index: unknown): void {
     const topic = Number.isInteger(index) ? this.topicCandidates[index as number] : undefined;
     if (topic === undefined) throw new GameError('候補が見つかりません');
@@ -182,6 +292,7 @@ export class Room {
     const seated = this.players.filter((p) => p.connected);
     if (seated.length < 2) throw new GameError('2人以上で始めてください');
     if (seated.length > LIMITS.maxPlayers) throw new GameError(`${LIMITS.maxPlayers}人以下で始めてください`);
+    if (this.mode === 'doors') return this.startDoors(seated);
     const total = seated.length * this.cardsPerPlayer;
     if (total > MAX_VALUE) throw new GameError('枚数が多すぎます');
 
@@ -204,7 +315,14 @@ export class Room {
   backToLobby(playerId: string): void {
     this.requireHost(playerId);
     if (this.phase === 'revealing') throw new GameError('めくり終わるまで待ってください');
+    // 10の扉の途中なら、まず中止して答えとログを公開する。ロビーへは結果画面から戻る
+    if (this.doors?.isRunning) {
+      this.doors.abort('ホストが中止しました');
+      this.phase = this.doors.phase;
+      return;
+    }
     this.stopReveal();
+    this.doors = null;
     this.phase = 'lobby';
     this.cards = [];
     this.order = [];
@@ -300,6 +418,9 @@ export class Room {
       you: viewerId,
       hostId: this.hostId,
       phase: this.phase,
+      mode: this.mode,
+      doorsSettings: this.doorsSettings,
+      doors: this.doors ? this.doors.viewFor(viewerId) : null,
       cardsPerPlayer: this.cardsPerPlayer,
       topic: this.topic,
       topicSource: this.topicSource,
