@@ -75,10 +75,10 @@ ASK_PROJECT_ID=<プロジェクトID>
 # 省略時の値
 # ASK_API_URL=https://langchaindemo.heroz.jp
 # ASK_MODEL=claude-55-sonnet-thinking
-# 10の扉のAI GMのモデル (ASKのmodelVariant)。省略時はASK_MODELと同じ
-# DOORS_MODEL=
+# 10の扉のAI GMのモデル (ASKのmodelVariant)
+# DOORS_MODEL=gpt-6-luna-thinking
 ```
 
-10の扉のAI GMはGPT-6.1-Lunaを想定しているが、ASKで通る`modelVariant`の値はまだ確かめていない。値が分かったら`DOORS_MODEL`に書く。通らない値を書くと、AI GMは答えを決められずロビーへ戻る (ログに`AI doors answer failed: ASK API returned 400: ...`が出る)。
+10の扉のAI GMの既定は`gpt-6-luna-thinking`。実機のASK APIで確かめた結果は次のとおり。`gpt-6.1-luna`・`gpt-61-luna` (各`-thinking`付きも) は400、`gpt-6-luna`と`gpt-6-luna-thinking`は200で答えが返った。通らない値を書くと、AI GMは答えを決められずロビーへ戻る (ログに`AI doors answer failed: ASK API returned 400: ...`が出る)。
 
 `claude-home` volumeは不要になった。旧構成から移すときは`docker volume rm`で消してよい。

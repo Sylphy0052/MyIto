@@ -9,6 +9,6 @@ services:
       ASK_API_KEY: ${ASK_API_KEY:-}
       ASK_PROJECT_ID: ${ASK_PROJECT_ID:-}
       ASK_MODEL: ${ASK_MODEL:-}
-      # 10の扉のAI GM用のモデル。未設定なら ASK_MODEL と同じ
+      # 10の扉のAI GM用のモデル。未設定なら gpt-6-luna-thinking
       DOORS_MODEL: ${DOORS_MODEL:-}
     restart: unless-stopped

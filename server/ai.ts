@@ -24,9 +24,10 @@ const ASK_API_KEY = (process.env.ASK_API_KEY ?? '').trim();
 const ASK_PROJECT_ID = Number(process.env.ASK_PROJECT_ID || '');
 // Sonnet 系は thinking 版だけが通る (非 thinking 版は ASK 側のプロンプトキャッシュの不具合で失敗する)
 const ASK_MODEL = process.env.ASK_MODEL || 'claude-55-sonnet-thinking';
-// 10の扉のAI GM用。GPT-6.1-Luna を想定するが、ASK で通る modelVariant を実機で確かめられていないので、
-// 未設定なら推測した値を使わずお題生成と同じモデルにする (docs/knowledge/ask-model-variant.md)
-export const DOORS_MODEL = process.env.DOORS_MODEL || ASK_MODEL;
+// 10の扉のAI GM用。実機のASKで確かめた結果、gpt-6.1-luna / gpt-61-luna (各 -thinking 付きも) は400、
+// gpt-6-luna と gpt-6-luna-thinking は200で答えが返った (docs/knowledge/ask-model-variant.md)。
+// 質問の意味の読み取りと解答の判定に推論が効き、応答も約1.7秒で30秒のタイムアウトに収まるので thinking 版を既定にする
+export const DOORS_MODEL = process.env.DOORS_MODEL || 'gpt-6-luna-thinking';
 
 export function sanitizeGenre(raw: unknown): string {
   if (typeof raw !== 'string') return '';
