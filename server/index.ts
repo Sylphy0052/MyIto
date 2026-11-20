@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { LIMITS, type Ack } from '../shared/types';
+import { LIMITS, type Ack, type DoorsAiModel } from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { acquireAiSlot, generateTopics, sanitizeGenre } from './ai';
@@ -94,7 +94,7 @@ function driveAiGm(room: Room): void {
   if (round.phase === 'doors-setup') {
     if (round.answer) return;
     round.aiBusy = true;
-    generateSecretAnswer(room.topic, room.aiAnswers)
+    generateSecretAnswer(room.doorsSettings.aiModel, room.topic, room.aiAnswers)
       .then(({ answer, memo }) => {
         if (!isCurrentRound(room, round) || round.phase !== 'doors-setup') return round.endAiAnswer();
         room.setAiAnswer(round, answer, memo);
@@ -115,10 +115,10 @@ function driveAiGm(room: Room): void {
   const secret = { answer: round.answer, memo: round.memo };
   const job =
     kind === 'question'
-      ? answerQuestion(secret, aiHistory(round), text).then((reply) => {
+      ? answerQuestion(room.doorsSettings.aiModel, secret, aiHistory(round), text).then((reply) => {
           if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiQuestion(id, reply);
         })
-      : judge(secret, text).then(({ verdict, reason }) => {
+      : judge(room.doorsSettings.aiModel, secret, text).then(({ verdict, reason }) => {
           if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiGuess(id, verdict, reason);
         });
   job
@@ -145,13 +145,13 @@ function aiHistory(round: DoorsRound): HistoryItem[] {
 }
 
 /** 表記の正規化で答えと一致すれば、AIに聞かずに正解にする */
-async function judge(secret: SecretAnswer, guess: string): Promise<Judgement> {
+async function judge(model: DoorsAiModel, secret: SecretAnswer, guess: string): Promise<Judgement> {
   const key = normalizeText(guess);
   // 正規化で空になる (記号だけの) 解答・答えは完全一致にせず、AIの判定に回す
   if (key !== '' && key === normalizeText(secret.answer)) {
     return { verdict: 'correct', reason: '表記をそろえると答えと一致しました' };
   }
-  return judgeGuess(secret, guess);
+  return judgeGuess(model, secret, guess);
 }
 
 function errorMessage(e: unknown): string {

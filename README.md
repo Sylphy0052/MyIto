@@ -75,10 +75,10 @@ ASK_PROJECT_ID=<プロジェクトID>
 # 省略時の値
 # ASK_API_URL=https://langchaindemo.heroz.jp
 # ASK_MODEL=claude-55-sonnet-thinking
-# 10の扉のAI GMのモデル (ASKのmodelVariant)
+# 10の扉のAI GMの既定のモデル (gpt-6-luna-thinking か gpt-6-luna。ロビーでホストが選び直せる)
 # DOORS_MODEL=gpt-6-luna-thinking
 ```
 
-10の扉のAI GMの既定は`gpt-6-luna-thinking`。実機のASK APIで確かめた結果は次のとおり。`gpt-6.1-luna`・`gpt-61-luna` (各`-thinking`付きも) は400、`gpt-6-luna`と`gpt-6-luna-thinking`は200で答えが返った。通らない値を書くと、AI GMは答えを決められずロビーへ戻る (ログに`AI doors answer failed: ASK API returned 400: ...`が出る)。
+10の扉のAI GMの既定は`gpt-6-luna-thinking`。実機のASK APIで確かめた結果は次のとおり。`gpt-6.1-luna`・`gpt-61-luna` (各`-thinking`付きも) は400、`gpt-6-luna`と`gpt-6-luna-thinking`は200で答えが返った。ロビーでホストが選べるのはこの200が返った2つだけで、`DOORS_MODEL`も2つのどちらかでなければ無視して既定に戻る。
 
 `claude-home` volumeは不要になった。旧構成から移すときは`docker volume rm`で消してよい。

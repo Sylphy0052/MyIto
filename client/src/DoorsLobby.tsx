@@ -1,5 +1,5 @@
 import { m, type Variants } from 'motion/react';
-import { LIMITS, type GameMode, type GmPick, type RoomView } from '../../shared/types';
+import { DOORS_AI_MODELS, DOORS_AI_MODEL_LABEL, LIMITS, type DoorsAiModel, type GameMode, type GmPick, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
 
 export const MODE_LABEL: Record<GameMode, string> = { ito: 'ito', doors: '10の扉' };
@@ -33,6 +33,7 @@ export function DoorsSummary({ view }: { view: RoomView }) {
       <li>GM: {s.gmPick === 'named' ? `指名 (${gmName ?? '未指名'})` : GM_PICK_LABEL[s.gmPick]}</li>
       <li>質問回数: {s.questions} 回</li>
       <li>嘘の上限: {s.maxLies === 0 ? 'なし' : `最大 ${s.maxLies} 回`}</li>
+      {s.gmPick === 'ai' && <li>AIのモデル: {DOORS_AI_MODEL_LABEL[s.aiModel]}</li>}
     </ul>
   );
 }
@@ -105,6 +106,21 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
         <m.p className="muted" variants={variants}>
           {AI_UNAVAILABLE}
         </m.p>
+      )}
+      {s.gmPick === 'ai' && view.aiAvailable && (
+        <m.div className="field-row" variants={variants}>
+          <span className="label">AIのモデル</span>
+          <select
+            value={s.aiModel}
+            onChange={(e) => act('doors:settings', { aiModel: e.target.value as DoorsAiModel })}
+          >
+            {DOORS_AI_MODELS.map((model) => (
+              <option key={model} value={model}>
+                {DOORS_AI_MODEL_LABEL[model]}
+              </option>
+            ))}
+          </select>
+        </m.div>
       )}
       {s.gmPick === 'ai' && view.aiAvailable && (
         <m.p className="muted" variants={variants}>
