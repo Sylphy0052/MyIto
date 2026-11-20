@@ -46,7 +46,10 @@ for (const [i, theme] of themes.entries()) {
       const s = Date.now();
       // AIが答えると残り回数が1減る。n問目の後は「残り (10-n-1) / 10」
       const ok = await page.getByText(new RegExp(`残り\\s*${10 - n - 1}\\s*/\\s*10`)).first().waitFor({ timeout: 90000 }).then(() => true, () => false);
-      replies.push(ok ? `${Date.now() - s}ms` : '応答なし(90秒)');
+      // 残り回数だけでなく、回答バッジが質問の数だけ付いたことも見る
+      const answered = ok && (await page.locator('.reply-badge').count()) >= n + 1;
+      replies.push(answered ? `${Date.now() - s}ms` : '応答なし(90秒)');
+      if (!answered) bad++;
       await page.waitForTimeout(500);
     }
     await page.screenshot({ path: `${out}/${tag}-asking.png`, fullPage: true });
@@ -57,6 +60,8 @@ for (const [i, theme] of themes.entries()) {
     );
     await page.screenshot({ path: `${out}/${tag}-reveal.png`, fullPage: true });
     if (reveal.startsWith('(')) bad++;
+    // テーマが画面から読めなかったら、画面と指定のずれを見られないので数える
+    if (!headerTheme) bad++;
     console.log(`[${tag}] テーマ指定=${theme || '(指定なし)'} 画面のテーマ=${headerTheme} → 答え=${reveal} / 答えが決まるまで ${decided}ms / 質問の応答 ${replies.join(', ')}`);
   } catch (e) {
     bad++;

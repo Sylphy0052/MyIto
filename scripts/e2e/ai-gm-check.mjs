@@ -21,6 +21,8 @@ const rec = (name, ok) => results.push(check(name, ok));
 const shot = (file) => page.screenshot({ path: `${out}/${file}.png`, fullPage: true });
 const body = async () => (await page.locator('body').textContent()) ?? '';
 const waitText = (t, timeout = 15000, exact = false) => page.getByText(t, { exact }).first().waitFor({ timeout }).then(() => true, () => false);
+// 回答バッジ (Yes/No など) だけを見る。画面のほかの場所の文字に釣られないようにする
+const waitBadge = (re, timeout = 15000) => page.locator('.reply-badge', { hasText: re }).first().waitFor({ timeout }).then(() => true, () => false);
 const retryBtn = () => page.getByRole("button", { name: "再試行" });
 const overflow = async () => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
 async function propose(kind, text) {
@@ -49,7 +51,7 @@ rec('出題中、画面に答えが出ない', !(await body()).includes(ANSWER))
 
 // 1. 普通の質問に、返答が付く
 await propose('question', '鳥ですか?');
-rec('質問に回答 (Yes) が付く', await waitText(/\bYes\b/));
+rec('質問に回答 (Yes) が付く', await waitBadge(/\bYes\b/));
 await shot('03-answered');
 
 // 2. 失敗した提案: 失敗ラベル、ほかの提案は順番待ち、取り消すと失敗の表示が消える
@@ -59,7 +61,7 @@ await propose('question', '生き物ですか?');
 await page.waitForTimeout(500);
 await shot('04-failed');
 rec('失敗した提案に「AIの応答に失敗」が出る', (await body()).includes('AIの応答に失敗 (ホストが再試行できます)'));
-rec('ほかの送信済みの提案は「AIの順番待ち」のまま', (await body()).includes('AIの順番待ち'));
+rec('ほかの送信済みの提案は「AIの順番待ち」のまま', (await page.locator('li', { hasText: '生き物ですか?' }).getByText('AIの順番待ち').count()) > 0);
 rec('失敗表示中もスマホ幅で横あふれしない', !(await overflow()));
 await page
   .locator('li', { hasText: `失敗する質問ですか? ${TAG}` })
@@ -74,7 +76,7 @@ await shot('05-after-cancel');
   console.log(`  詳細: ラベルが消えた=${labelGone} .ai-error数=${alerts}`);
   rec('失敗した提案を取り消すと、失敗の通知と表示が消える', labelGone && alerts === 0);
 }
-rec('取り消しのあと、順番待ちだった質問にAIが回答する', await waitText(/\bNo\b/));
+rec('取り消しのあと、順番待ちだった質問にAIが回答する', await waitBadge(/\bNo\b/));
 
 // 3. 再試行: 1回目は失敗、再試行で回答が付く
 await propose('question', `失敗その2 ${TAG} 鳥の仲間ですか?`);
@@ -92,8 +94,11 @@ await propose('guess', '鳥');
 rec('解答が「おしい」になる', await waitText('おしい'));
 await shot('07-guesses');
 await propose('guess', ANSWER);
-// 解答の履歴にも「ペンギン」が出るので、文字ではなく提案欄が消える (ゲーム終了) ことで見る。結果画面の中身は撮った画像で確認する
+// 解答の履歴にも「ペンギン」が出るので、文字ではなく提案欄が消える (ゲーム終了) ことで見る
 rec('正解するとゲームが終わり、提案欄が消える', await page.locator('.proposal-form').waitFor({ state: 'detached', timeout: 20000 }).then(() => true, () => false));
+// 結果画面の答えの札だけを見る (履歴の「ペンギン」と取り違えない)。見た目は撮った画像で確認する
+const revealed = page.locator('.doors-result .answer-reveal .secret-card');
+rec('結果画面の答えの札に正解が出る', await revealed.waitFor({ timeout: 10000 }).then(async () => (await revealed.innerText()).trim() === ANSWER, () => false));
 await page.waitForTimeout(1500);
 await shot('08-result');
 rec('結果画面もスマホ幅で横あふれしない', !(await overflow()));
