@@ -1,44 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
-import type { RoomView } from '../../shared/types';
+import { isDoorsPhase, type RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
+import { copyText } from './copyText';
+import { Doors } from './Doors';
 
 const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
 const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
-// navigator.clipboard は https か localhost でしか使えない。LANのIPをhttpで開いたときは execCommand に頼る
-async function copyText(text: string): Promise<boolean> {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      // 権限で拒否されたときは下の方法を試す
-    }
-  }
-  const previousFocus = document.activeElement;
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  // iOS Safari は select() だけでは選択されない
-  textarea.setSelectionRange(0, text.length);
-  try {
-    return document.execCommand('copy');
-  } catch {
-    return false;
-  } finally {
-    textarea.remove();
-    if (previousFocus instanceof HTMLElement) previousFocus.focus();
-  }
-}
-
-export type Act = (event: string, payload?: object) => Promise<void>;
+export type Act = (event: string, payload?: object) => Promise<boolean>;
 
 interface Props {
   view: RoomView;
@@ -48,6 +20,7 @@ interface Props {
 
 export function RoomScreen({ view, act, onLeave }: Props) {
   const isHost = view.you === view.hostId;
+  const isDoorsRound = isDoorsPhase(view.phase);
   const nameOf = useCallback(
     (id: string) => view.players.find((p) => p.id === id)?.name ?? '?',
     [view.players],
@@ -176,7 +149,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       </m.header>
 
       <section className="topic">
-        <span className="label">お題</span>
+        <span className="label">{view.mode === 'doors' ? 'テーマ' : 'お題'}</span>
         <AnimatePresence mode="wait" initial={false}>
           <m.span
             key={view.topic}
@@ -205,7 +178,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         )}
       </AnimatePresence>
 
-      {view.phase !== 'lobby' && myCards.length > 0 && (
+      {view.phase !== 'lobby' && !isDoorsRound && myCards.length > 0 && (
         <m.section
           className="my-numbers"
           initial={{ opacity: 0, y: -10 }}
@@ -216,13 +189,17 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         </m.section>
       )}
 
-      {view.phase !== 'lobby' && myCards.length === 0 && (
+      {view.phase !== 'lobby' && !isDoorsRound && myCards.length === 0 && (
         <div className="notice">観戦中です。次のラウンドから参加できます</div>
       )}
 
       {view.phase === 'lobby' ? (
         <m.div key="lobby" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <Lobby view={view} isHost={isHost} act={act} />
+        </m.div>
+      ) : isDoorsRound && view.doors ? (
+        <m.div key="doors" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <Doors view={view} isHost={isHost} act={act} />
         </m.div>
       ) : (
         <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>

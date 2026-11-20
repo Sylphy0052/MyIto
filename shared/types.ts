@@ -1,6 +1,8 @@
-export type Phase = 'lobby' | 'playing' | 'revealing' | 'result';
+export type DoorsPhase = 'doors-setup' | 'doors-asking' | 'doors-final' | 'doors-result';
+export type Phase = 'lobby' | 'playing' | 'revealing' | 'result' | DoorsPhase;
 export type CardState = 'hand' | 'placed';
 export type TopicSource = 'random' | 'custom' | 'ai' | 'ai-fallback';
+export type GameMode = 'ito' | 'doors';
 
 export const LIMITS = {
   name: 16,
@@ -10,7 +12,82 @@ export const LIMITS = {
   aiCandidates: 10,
   maxPlayers: 14,
   maxCardsPerPlayer: 5,
+  /** 10の扉: 質問・解答の文字数 */
+  doorsProposal: 60,
+  /** 10の扉: GMの答えの文字数 */
+  doorsAnswer: 30,
+  /** 10の扉: ロビーで決める質問回数の上限 */
+  doorsMaxQuestions: 30,
+  /** 10の扉: 延長を含めた質問回数の上限 */
+  doorsMaxTotal: 99,
+  doorsMaxLies: 3,
+  /** 10の扉: 1人が同時に出せる承認待ちの数 */
+  doorsPendingPerPlayer: 2,
+  /** 10の扉: ログに残す提案の数 */
+  doorsLog: 500,
 } as const;
+
+export const DOORS_DEFAULT_QUESTIONS = 10;
+
+export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
+  return phase.startsWith('doors-');
+}
+
+export type GmPick = 'random' | 'named';
+export type ProposalKind = 'question' | 'guess';
+/** proposed: 承認待ち / sent: GMへ送信済み / discarded: 終了時に未処理のまま破棄 */
+export type ProposalStatus = 'proposed' | 'sent' | 'answered' | 'rejected' | 'cancelled' | 'discarded';
+export type QuestionReply = 'yes' | 'no' | 'maybe-yes' | 'maybe-no' | 'unknown';
+export type GuessReply = 'correct' | 'close' | 'wrong';
+export type DoorsReply = QuestionReply | GuessReply;
+export type DoorsOutcome = 'win' | 'lose' | 'aborted';
+
+export const QUESTION_REPLIES: readonly QuestionReply[] = ['yes', 'maybe-yes', 'unknown', 'maybe-no', 'no'];
+export const GUESS_REPLIES: readonly GuessReply[] = ['correct', 'close', 'wrong'];
+
+export interface DoorsSettings {
+  gmPick: GmPick;
+  /** gmPick が named のときのGM */
+  gmId: string;
+  questions: number;
+  maxLies: number;
+}
+
+export interface ProposalView {
+  id: string;
+  /** 通し番号 (1始まり) */
+  seq: number;
+  authorId: string;
+  authorName: string;
+  kind: ProposalKind;
+  /** 最終解答か */
+  isFinal: boolean;
+  text: string;
+  status: ProposalStatus;
+  approverName: string;
+  cancelledByName: string;
+  reply: DoorsReply | null;
+  /** 嘘印。GM本人と結果画面にだけ入る。それ以外は null */
+  lie: boolean | null;
+}
+
+export interface DoorsView {
+  gmId: string;
+  /** GM本人と結果画面にだけ入る。それ以外は null */
+  answer: string | null;
+  /** 延長を含めた質問回数 */
+  limit: number;
+  used: number;
+  maxLies: number;
+  /** GM本人と結果画面にだけ入る。それ以外は null */
+  liesUsed: number | null;
+  proposals: ProposalView[];
+  outcome: DoorsOutcome | null;
+  abortReason: string;
+  /** 「延長をお願い」が押されるたびに増える。ホストとGMの画面で通知に使う */
+  extendRequestSeq: number;
+  extendRequestBy: string;
+}
 
 export interface PlayerView {
   id: string;
@@ -32,6 +109,10 @@ export interface RoomView {
   you: string;
   hostId: string;
   phase: Phase;
+  mode: GameMode;
+  doorsSettings: DoorsSettings;
+  /** 10の扉のラウンド中と結果画面だけ入る */
+  doors: DoorsView | null;
   cardsPerPlayer: number;
   topic: string;
   topicSource: TopicSource;

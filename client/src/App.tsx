@@ -111,6 +111,7 @@ export function App() {
     async (event: string, payload: object = {}) => {
       const res = await send(event, payload);
       if (!res.ok) showError(res.error);
+      return res.ok;
     },
     [showError],
   );
