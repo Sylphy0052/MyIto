@@ -10,7 +10,7 @@ const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
 const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
-export type Act = (event: string, payload?: object) => Promise<void>;
+export type Act = (event: string, payload?: object) => Promise<boolean>;
 
 interface Props {
   view: RoomView;

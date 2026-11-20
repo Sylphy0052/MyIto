@@ -258,8 +258,7 @@ function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: Do
 
   const submit = async () => {
     if (!text.trim() || blocker) return;
-    await act('doors:propose', { kind: sendKind, text });
-    setText('');
+    if (await act('doors:propose', { kind: sendKind, text })) setText('');
   };
 
   return (
