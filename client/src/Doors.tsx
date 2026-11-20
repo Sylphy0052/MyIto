@@ -6,7 +6,7 @@ import type { Act } from './RoomScreen';
 import { DoorRow, LogRow, ReplyBadge, STATUS_LABEL, WaitingDoors, kindLabel } from './DoorsParts';
 import { CorrectPanel, GmQueue, SecretAnswer } from './DoorsGm';
 import { DoorsResult } from './DoorsResult';
-import { TimeLeft, TimeUpNotice } from './DoorsTime';
+import { TimeLeft, TimeUpNotice, TurnLeft, TurnTimeoutNotice } from './DoorsTime';
 import { playChime, useSoundSetting } from './sound';
 
 interface Props {
@@ -51,6 +51,7 @@ export function Doors({ view, isHost, act }: Props) {
         </span>
         {view.phase !== 'doors-setup' && <DoorRow doors={doors} isFinal={view.phase === 'doors-final'} />}
         {isRunning && <TimeLeft doors={doors} />}
+        {isRunning && <TurnLeft doors={doors} />}
         {doors.maxLies > 0 && !isGm && isRunning && (
           <span className="lie-notice">
             {doors.isAiGm ? 'AI' : 'GM'}は最大{doors.maxLies}回嘘をつくことがあります
@@ -60,6 +61,7 @@ export function Doors({ view, isHost, act }: Props) {
       <ExtendRequestNotice doors={doors} canSee={isHost || isGm} />
       {isRunning && <CorrectNotice doors={doors} canSee={!isGm} />}
       {isRunning && <TimeUpNotice doors={doors} />}
+      {isRunning && <TurnTimeoutNotice doors={doors} />}
       {isRunning && doors.isAiGm && <AiStatus doors={doors} isHost={isHost} act={act} />}
       {isGm && isRunning && doors.answer && <SecretAnswer answer={doors.answer} />}
       {/* フェーズが切り替わっても、直前の回答を出し続けるため外に置く */}

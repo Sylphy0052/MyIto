@@ -35,6 +35,9 @@ export const DOORS_MAX_TIME_LIMIT_MIN = 60;
 /** ラウンドの制限時間 (分)。0 はなし、ほかは 1〜60 分を 1 分刻み */
 export const DOORS_TIME_LIMITS: readonly number[] = Array.from({ length: DOORS_MAX_TIME_LIMIT_MIN + 1 }, (_, i) => i);
 
+/** 1手番の制限時間 (秒)。0 はなし、ほかは 10〜180 秒を 10 秒刻み */
+export const DOORS_TURN_LIMITS: readonly number[] = [0, ...Array.from({ length: 18 }, (_, i) => (i + 1) * 10)];
+
 export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
   return phase.startsWith('doors-');
 }
@@ -68,6 +71,8 @@ export interface DoorsSettings {
   maxLies: number;
   /** ラウンドの制限時間 (分)。0 はなし */
   timeLimitMin: number;
+  /** 1手番の制限時間 (秒)。0 はなし */
+  turnLimitSec: number;
   /** gmPick が ai のときに使うモデル */
   aiModel: DoorsAiModel;
 }
@@ -140,6 +145,14 @@ export interface DoorsView {
   isTimeUp: boolean;
   /** このラウンドで一度でも時間切れになったか (結果画面用) */
   wasTimeUp: boolean;
+  /** 1手番の制限時間 (秒)。0 はなし */
+  turnLimitSec: number;
+  /** 手番の残りミリ秒 (進行中・止まっている間)。数えない段階・制限なしは null。受け取った時点の値から手元で数え直す */
+  turnLeftMs: number | null;
+  /** 手番がGMの回答待ちで止まっているか */
+  isTurnPaused: boolean;
+  /** 手番の時間切れで質問回数を使った回数 */
+  turnTimeoutCount: number;
 }
 
 export interface PlayerView {
