@@ -7,7 +7,7 @@ interface Props {
   onEnter: (name: string, code: string | null) => Promise<void>;
 }
 
-const TITLE = 'ito online';
+const TITLE = 'TableTalkOnline';
 // タイトルの上に浮かべる飾りのカード
 const DECO_NUMBERS = [7, 42, 88, 100, 1, 63];
 const DECO_STEP_PERCENT = 16;
