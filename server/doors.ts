@@ -212,6 +212,8 @@ export class DoorsRound {
     if (p.id === this.aiBusyId) throw new GameError('AIが回答中の提案は取り消せません');
     p.status = 'cancelled';
     p.cancelledByName = seat.name;
+    // 失敗した提案を取り消したら、失敗の表示も消す (次のAI処理を待たずに)
+    if (p.id === this.aiFailedId) this.clearAiError();
     this.settle();
   }
 
@@ -441,6 +443,7 @@ export class DoorsRound {
       isAiGm: this.isAiGm,
       aiBusy: this.aiBusy,
       aiBusyId: this.aiBusyId,
+      aiFailedId: this.aiFailedId,
       aiError: this.aiError,
       aiErrorSeq: this.aiErrorSeq,
       answer: canSeeSecret ? this.answer : null,

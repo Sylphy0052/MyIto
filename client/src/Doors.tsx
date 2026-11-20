@@ -354,6 +354,7 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
   const sentLabel = (p: ProposalView): string => {
     if (!doors.isAiGm) return `→ ${STATUS_LABEL.sent}`;
     if (p.id === doors.aiBusyId) return '→ 回答待ち (AIが考え中)';
+    if (p.id === doors.aiFailedId) return '→ AIの応答に失敗 (ホストが再試行できます)';
     return '→ AIの順番待ち';
   };
   return (
