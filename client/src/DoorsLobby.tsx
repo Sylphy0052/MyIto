@@ -1,12 +1,22 @@
 import { m, type Variants } from 'motion/react';
-import { LIMITS, type GameMode, type RoomView } from '../../shared/types';
+import { LIMITS, type GameMode, type GmPick, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
 
 export const MODE_LABEL: Record<GameMode, string> = { ito: 'ito', doors: '10の扉' };
 
+const AI_UNAVAILABLE = 'サーバにASK APIの設定 (ASK_API_KEY / ASK_PROJECT_ID) が無いため、AIはGMを務められません';
+
+const GM_PICK_LABEL: Record<GmPick, string> = { random: 'ランダム', named: '指名', ai: 'AI' };
+
+/** 開始に要る接続中の人数。AIがGMなら全員が回答者なので1人でよい */
+export function minPlayers(view: RoomView): number {
+  return view.mode === 'doors' && view.doorsSettings.gmPick === 'ai' ? 1 : 2;
+}
+
 /** 10の扉の開始を止める理由。開始できるなら空 */
 export function doorsStartBlocker(view: RoomView): string {
   const s = view.doorsSettings;
+  if (s.gmPick === 'ai') return view.aiAvailable ? '' : AI_UNAVAILABLE;
   if (s.gmPick !== 'named') return '';
   const gm = view.players.find((p) => p.id === s.gmId);
   if (!gm) return 'GMを指名してください';
@@ -20,7 +30,7 @@ export function DoorsSummary({ view }: { view: RoomView }) {
   const gmName = view.players.find((p) => p.id === s.gmId)?.name;
   return (
     <ul className="settings-summary">
-      <li>GM: {s.gmPick === 'named' ? `指名 (${gmName ?? '未指名'})` : 'ランダム'}</li>
+      <li>GM: {s.gmPick === 'named' ? `指名 (${gmName ?? '未指名'})` : GM_PICK_LABEL[s.gmPick]}</li>
       <li>質問回数: {s.questions} 回</li>
       <li>嘘の上限: {s.maxLies === 0 ? 'なし' : `最大 ${s.maxLies} 回`}</li>
     </ul>
@@ -57,6 +67,9 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
         <select value={s.gmPick} onChange={(e) => act('doors:settings', { gmPick: e.target.value })}>
           <option value="random">ランダム (毎ラウンド抽選)</option>
           <option value="named">プレイヤー指名</option>
+          <option value="ai" disabled={!view.aiAvailable}>
+            AI (全員が回答者)
+          </option>
         </select>
         {s.gmPick === 'named' && (
           <select value={s.gmId} onChange={(e) => act('doors:settings', { gmId: e.target.value })}>
@@ -88,6 +101,16 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
           ))}
         </select>
       </m.div>
+      {!view.aiAvailable && (
+        <m.p className="muted" variants={variants}>
+          {AI_UNAVAILABLE}
+        </m.p>
+      )}
+      {s.gmPick === 'ai' && view.aiAvailable && (
+        <m.p className="muted" variants={variants}>
+          AIがテーマから答えを決め、質問と解答に答えます。1人でも遊べます
+        </m.p>
+      )}
       {s.gmPick === 'random' && connected.length >= 3 && (
         <m.p className="muted" variants={variants}>
           3人以上のときは、直前のGMは抽選から外れます

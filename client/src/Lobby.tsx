@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, m, type Variants } from 'motion/react';
 import { LIMITS, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
-import { DoorsSettingsForm, DoorsSummary, MODE_LABEL, ModeToggle, doorsStartBlocker } from './DoorsLobby';
+import { DoorsSettingsForm, DoorsSummary, MODE_LABEL, ModeToggle, doorsStartBlocker, minPlayers } from './DoorsLobby';
 
 interface Props {
   view: RoomView;
@@ -112,7 +112,8 @@ export function Lobby({ view, isHost, act }: Props) {
   const topicLabel = isDoors ? 'テーマ' : 'お題';
   // 開始ボタンの条件はゲーム種別で変わる。10の扉では指名したGMが接続していること
   const doorsBlocker = isDoors ? doorsStartBlocker(view) : '';
-  const canStart = seated >= 2 && seated <= LIMITS.maxPlayers && !view.aiBusy && !doorsBlocker;
+  const minSeated = minPlayers(view);
+  const canStart = seated >= minSeated && seated <= LIMITS.maxPlayers && !view.aiBusy && !doorsBlocker;
 
   if (!isHost) {
     return (
@@ -244,7 +245,7 @@ export function Lobby({ view, isHost, act }: Props) {
             {doorsBlocker}
           </m.p>
         )}
-        {seated < 2 && (
+        {seated < minSeated && (
           <m.p
             className="muted"
             initial={{ opacity: 0, height: 0 }}

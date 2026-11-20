@@ -134,6 +134,7 @@ export function LogRow({ p, showLie }: { p: ProposalView; showLie: boolean }) {
         {p.reply ? <ReplyBadge reply={p.reply} /> : <span className={`status-tag status-${p.status}`}>{STATUS_LABEL[p.status]}</span>}
         {showLie && p.lie && <span className="lie-tag">嘘</span>}
         {p.status === 'cancelled' && p.cancelledByName && <small className="muted"> ({p.cancelledByName})</small>}
+        {p.reason && <small className="muted reply-reason"> {p.reason}</small>}
       </span>
     </>
   );

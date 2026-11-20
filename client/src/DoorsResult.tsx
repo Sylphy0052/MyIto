@@ -26,9 +26,11 @@ export function outcomeLabel(doors: DoorsView): string {
 function logText(view: RoomView, doors: DoorsView): string {
   const lines = doors.proposals.map((p) => {
     const result = p.reply ? REPLY_LABEL[p.reply] : STATUS_LABEL[p.status];
-    return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}`;
+    const reason = p.reason ? ` (理由: ${p.reason})` : '';
+    return `${p.seq}. [${kindLabel(p.kind, p.isFinal)}] ${p.authorName}: ${p.text} → ${result}${p.lie ? ' (嘘)' : ''}${reason}`;
   });
-  return [`10の扉 テーマ: ${view.topic}`, `答え: ${doors.answer || '(未決定)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
+  const gm = doors.isAiGm ? ['GM: AI'] : [];
+  return [`10の扉 テーマ: ${view.topic}`, ...gm, `答え: ${doors.answer || '(未決定)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
 }
 
 interface Props {
@@ -92,7 +94,7 @@ export function DoorsResult({ view, doors, isHost, act, isJustFinished }: Props)
       </div>
       {lies.length > 0 && (
         <div className="lie-reveal">
-          <span className="label">GMの嘘</span>
+          <span className="label">{doors.isAiGm ? 'AIの嘘' : 'GMの嘘'}</span>
           <m.ul variants={liesVariants} initial={isJustFinished ? 'hidden' : false} animate="show">
             {lies.map((p) => (
               <m.li key={p.id} variants={lieVariants} className="lie-item">
