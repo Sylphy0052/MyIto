@@ -155,14 +155,15 @@ const leftSec = async (p) => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : -1;
 };
 const beforeExtend = await leftSec(ra);
-// 後の q3・q4 の提案と回答を締切までに終えられるよう、4回延ばして余裕を持たせる
-for (let i = 0; i < 4; i += 1) {
+// 後の q3・q4 の提案と回答を締切までに終えられるよう、8回延ばして余裕を持たせる (残りはおよそ 36 秒)
+const EXTEND_TIMES = 8;
+for (let i = 0; i < EXTEND_TIMES; i += 1) {
   await gm.getByRole('button', { name: '時間 +1分' }).click();
   await gm.waitForTimeout(300);
 }
 const afterExtend = await leftSec(ra);
-// 4回で 16 秒延びる (1分 = 4秒)。押してからの経過を見込んで 13 秒以上増えていればよい
-check('「時間 +1分」を4回押すと、全員の残り時間が延びる', afterExtend - beforeExtend >= 13, `${beforeExtend}s → ${afterExtend}s`);
+// 8回で 32 秒延びる (1分 = 4秒)。押す間の経過 (1回およそ0.5秒) と表示の丸めを見込んで 24 秒以上増えていればよい
+check(`「時間 +1分」を${EXTEND_TIMES}回押すと、全員の残り時間が延びる`, afterExtend - beforeExtend >= 24, `${beforeExtend}s → ${afterExtend}s`);
 await shotAll('05-extended', all);
 
 // ---- 回数を使い切って最終解答の段階へ。締切を過ぎても時間切れの案内は出ない ----
@@ -176,8 +177,8 @@ await item(rb, q4).getByRole('button', { name: 'OK', exact: true }).click();
 await gmReply(gm, q4, 'Yes');
 check('回数を使い切ると最終解答の段階へ進む', await until(ra.getByText('最終解答を出す').first().waitFor({ timeout: 5000 })));
 const noticeBefore = await ra.getByText('時間切れ。最終解答へ進みます').count();
-// 延長のあとの残りは最大でおよそ 20 秒 (4秒 + 16秒)。それより長く待って締切を確実に過ぎる
-await ra.waitForTimeout(MINUTE_MS * 6);
+// 延長のあとの残りは最大でおよそ 36 秒 (4秒 + 32秒)。それより長く待って締切を確実に過ぎる
+await ra.waitForTimeout(MINUTE_MS * 10);
 check('最終解答の段階で締切を過ぎても、時間切れの案内は出ない', noticeBefore === 0 && (await ra.getByText('時間切れ。最終解答へ進みます').count()) === 0 && (await ra.locator('.time-left').count()) === 0);
 await shotAll('06-final-after-deadline', all);
 

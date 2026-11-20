@@ -254,7 +254,9 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
         <p className="final-guide">
           {doors.used < doors.limit
             ? '時間切れのため、質問へ戻るには「時間 +1分」で時間も延ばす必要があります (回数を足すだけでは戻りません)。'
-            : '時間切れで回数も使い切っています。質問へ戻るには「延長 +1」で回数を足し、「時間 +1分」で時間も延ばしてください。'}
+            : doors.limit < LIMITS.doorsMaxTotal
+              ? '時間切れで回数も使い切っています。質問へ戻るには「延長 +1」で回数を足し、「時間 +1分」で時間も延ばしてください。'
+              : `時間切れで、回数も上限の${LIMITS.doorsMaxTotal}回に達しています。これ以上は質問へ戻せません。`}
         </p>
       )}
 
