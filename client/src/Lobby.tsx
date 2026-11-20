@@ -58,6 +58,51 @@ function Count({ value }: { value: number }) {
   );
 }
 
+/**
+ * AIのお題候補の一覧。onPickを渡すとホスト用に選べ、渡さないと表示だけになる (ホスト以外)。
+ * 候補が入れ替わったら、一覧ごと作り直して順に出す
+ */
+function CandidateList({ view, onPick }: { view: RoomView; onPick?: (index: number) => void }) {
+  if (view.topicCandidates.length === 0) return null;
+  return (
+    <m.ul
+      key={view.topicCandidates.join('\n')}
+      className="topic-candidates"
+      initial="hidden"
+      animate="show"
+      variants={candidatesVariants}
+    >
+      {view.topicCandidates.map((t, i) => {
+        const isSelected = view.topicSource === 'ai' && view.topic === t;
+        return (
+          <m.li key={t} variants={candidateVariants}>
+            {onPick ? (
+              <m.button
+                className={isSelected ? 'selected' : undefined}
+                disabled={view.aiBusy}
+                animate={isSelected ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+                transition={{ duration: 0.35 }}
+                whileHover={view.aiBusy ? undefined : { y: -2 }}
+                onClick={() => onPick(i)}
+              >
+                {t}
+              </m.button>
+            ) : (
+              <span
+                className={isSelected ? 'candidate-static selected' : 'candidate-static'}
+                aria-current={isSelected || undefined}
+              >
+                {t}
+                {isSelected && <small className="candidate-badge">選択中</small>}
+              </span>
+            )}
+          </m.li>
+        );
+      })}
+    </m.ul>
+  );
+}
+
 export function Lobby({ view, isHost, act }: Props) {
   const [customTopic, setCustomTopic] = useState('');
   const [genre, setGenre] = useState('');
@@ -84,6 +129,12 @@ export function Lobby({ view, isHost, act }: Props) {
         <m.p variants={rowVariants}>
           1人 {view.cardsPerPlayer} 枚 / お題: {SOURCE_LABEL[view.topicSource]}
         </m.p>
+        {view.topicCandidates.length > 0 && (
+          <m.div variants={rowVariants}>
+            <p className="muted">AIの候補 (選ぶのはホストです)</p>
+            <CandidateList view={view} />
+          </m.div>
+        )}
         <m.p className="muted" variants={rowVariants}>
           ホストが開始するのを待っています
           <span className="dots" aria-hidden="true">
@@ -151,37 +202,7 @@ export function Lobby({ view, isHost, act }: Props) {
           {view.aiBusy ? '生成中...' : `AIで${LIMITS.aiCandidates}案生成`}
         </button>
       </m.div>
-      {view.topicCandidates.length > 0 && (
-        // 候補が入れ替わったら、一覧ごと作り直して順に出す
-        <m.ul
-          key={view.topicCandidates.join('\n')}
-          className="topic-candidates"
-          initial="hidden"
-          animate="show"
-          variants={candidatesVariants}
-        >
-          {view.topicCandidates.map((t, i) => {
-            const isSelected = view.topicSource === 'ai' && view.topic === t;
-            return (
-              <m.li
-                key={t}
-                variants={candidateVariants}
-              >
-                <m.button
-                  className={isSelected ? 'selected' : undefined}
-                  disabled={view.aiBusy}
-                  animate={isSelected ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-                  transition={{ duration: 0.35 }}
-                  whileHover={view.aiBusy ? undefined : { y: -2 }}
-                  onClick={() => act('topic:pick', { index: i })}
-                >
-                  {t}
-                </m.button>
-              </m.li>
-            );
-          })}
-        </m.ul>
-      )}
+      <CandidateList view={view} onPick={(i) => act('topic:pick', { index: i })} />
 
       <m.div variants={rowVariants}>
         <m.button

@@ -343,6 +343,21 @@ textarea::placeholder {
   width: 100%;
   text-align: left;
 }
+.topic-candidates .candidate-static {
+  display: block;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  text-align: left;
+  cursor: default;
+  overflow-wrap: anywhere;
+}
+.candidate-badge {
+  margin-left: var(--sp-2);
+  opacity: 0.8;
+}
+.topic-candidates .candidate-static.selected,
 .topic-candidates button.selected {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 25%, var(--surface-2));
