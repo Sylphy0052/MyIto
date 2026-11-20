@@ -1,3 +1,4 @@
+import './loadEnv';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
