@@ -460,7 +460,7 @@ export class Room {
       phase: this.phase,
       mode: this.mode,
       doorsSettings: this.doorsSettings,
-      doors: this.doors ? this.doors.viewFor(viewerId) : null,
+      doors: this.doors ? this.doors.viewFor(viewerId, this.seats()) : null,
       cardsPerPlayer: this.cardsPerPlayer,
       topic: this.topic,
       topicSource: this.topicSource,

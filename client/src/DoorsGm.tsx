@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { GUESS_REPLIES, QUESTION_REPLIES, type DoorsView, type ProposalView } from '../../shared/types';
 import type { Act } from './RoomScreen';
-import { REPLY_LABEL, REPLY_SYMBOL, kindLabel, replyTone } from './DoorsParts';
+import { REPLY_LABEL, REPLY_SYMBOL, confirmReply, kindLabel, replyTone } from './DoorsParts';
 import { playChime } from './sound';
 
 /** 秘密の答え。画面共有の事故に備えて隠せる。切り替えはカードがめくれるように見せる */
@@ -43,7 +43,7 @@ function QueueItem({ p, canLie, act }: { p: ProposalView; canLie: boolean; act: 
       <p className="queue-text">{p.text}</p>
       <div className="reply-buttons">
         {replies.map((r) => (
-          <button key={r} className={`reply-button ${replyTone(r)}`} onClick={() => act('doors:reply', { id: p.id, reply: r, lie: isLie })}>
+          <button key={r} className={`reply-button ${replyTone(r)}`} onClick={() => confirmReply(p, r) && act('doors:reply', { id: p.id, reply: r, lie: isLie })}>
             <span aria-hidden="true">{REPLY_SYMBOL[r]}</span> {REPLY_LABEL[r]}
           </button>
         ))}
@@ -58,6 +58,43 @@ function QueueItem({ p, canLie, act }: { p: ProposalView; canLie: boolean; act: 
         </label>
       )}
     </m.li>
+  );
+}
+
+/** 回答済みの提案の判定を直す。開いている間だけ判定ボタンと嘘の切り替えを出す */
+export function CorrectPanel({ p, canLie, act, onClose }: { p: ProposalView; canLie: boolean; act: Act; onClose: () => void }) {
+  const [isLie, setIsLie] = useState(p.lie === true);
+  const replies = p.kind === 'question' ? QUESTION_REPLIES : GUESS_REPLIES;
+  // 嘘を付けるのは、元から嘘だった提案か、嘘の残りがあるとき
+  const showLie = p.kind === 'question' && (canLie || p.lie === true);
+  return (
+    <div className="correct-panel">
+      <div className="reply-buttons">
+        {replies.map((r) => (
+          <button
+            key={r}
+            className={`reply-button ${replyTone(r)}`}
+            disabled={r === p.reply && isLie === (p.lie === true)}
+            onClick={() => {
+              if (!confirmReply(p, r)) return;
+              void act('doors:correct', { id: p.id, reply: r, lie: isLie });
+              onClose();
+            }}
+          >
+            <span aria-hidden="true">{REPLY_SYMBOL[r]}</span> {REPLY_LABEL[r]}
+          </button>
+        ))}
+        <button className="reply-button tone-muted" onClick={onClose}>
+          やめる
+        </button>
+      </div>
+      {showLie && (
+        <label className="lie-toggle">
+          <input type="checkbox" checked={isLie} onChange={(e) => setIsLie(e.target.checked)} />
+          嘘をつく (印はGMにだけ見え、結果画面で公開されます)
+        </label>
+      )}
+    </div>
   );
 }
 

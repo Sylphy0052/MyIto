@@ -75,9 +75,17 @@ export interface ProposalView {
   isFinal: boolean;
   text: string;
   status: ProposalStatus;
-  approverName: string;
+  /** OKした回答者の名前 */
+  approverNames: string[];
+  /** 承認待ちのときの、承認が必要な人数とOK済みの人数 */
+  approvalsNeeded: number;
+  approvalsDone: number;
+  /** 見ている本人がOK済みか */
+  isApprovedByYou: boolean;
   cancelledByName: string;
   reply: DoorsReply | null;
+  /** 訂正前の最初の判定 (嘘の印は付けない)。訂正していなければ null */
+  correctedFrom: DoorsReply | null;
   /** 嘘印。GM本人と結果画面にだけ入る。それ以外は null */
   lie: boolean | null;
   /** AI GMの解答の判定理由。結果画面にだけ入る。それ以外は null */
@@ -112,6 +120,10 @@ export interface DoorsView {
   /** 「延長をお願い」が押されるたびに増える。ホストとGMの画面で通知に使う */
   extendRequestSeq: number;
   extendRequestBy: string;
+  /** GMが判定を訂正するたびに増える。GM以外の通知に使う */
+  correctSeq: number;
+  /** 最後に訂正した提案の通し番号 */
+  correctSeqBy: number;
 }
 
 export interface PlayerView {

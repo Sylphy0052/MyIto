@@ -384,6 +384,10 @@ io.on('connection', (socket: GameSocket) => {
     'doors:reply',
     withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.reply(pid, p.id, p.reply, p.lie))),
   );
+  socket.on(
+    'doors:correct',
+    withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.correct(pid, p.id, p.reply, p.lie))),
+  );
   socket.on('doors:reject', withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.reject(pid, p.id))));
   socket.on(
     'doors:extend',

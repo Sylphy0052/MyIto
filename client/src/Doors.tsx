@@ -4,7 +4,7 @@ import { LIMITS, type DoorsView, type ProposalKind, type ProposalView, type Room
 import { normalizeText } from '../../shared/normalize';
 import type { Act } from './RoomScreen';
 import { DoorRow, LogRow, ReplyBadge, STATUS_LABEL, WaitingDoors, kindLabel } from './DoorsParts';
-import { GmQueue, SecretAnswer } from './DoorsGm';
+import { CorrectPanel, GmQueue, SecretAnswer } from './DoorsGm';
 import { DoorsResult } from './DoorsResult';
 import { playChime, useSoundSetting } from './sound';
 
@@ -56,6 +56,7 @@ export function Doors({ view, isHost, act }: Props) {
         )}
       </div>
       <ExtendRequestNotice doors={doors} canSee={isHost || isGm} />
+      {isRunning && <CorrectNotice doors={doors} canSee={!isGm} />}
       {isRunning && doors.isAiGm && <AiStatus doors={doors} isHost={isHost} act={act} />}
       {isGm && isRunning && doors.answer && <SecretAnswer answer={doors.answer} />}
       {/* フェーズが切り替わっても、直前の回答を出し続けるため外に置く */}
@@ -105,6 +106,37 @@ function ExtendRequestNotice({ doors, canSee }: { doors: DoorsView; canSee: bool
           exit={{ opacity: 0 }}
         >
           {doors.extendRequestBy} さんが延長をお願いしています
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** GMが判定を訂正したことをGM以外に知らせる。リロード直後は前の訂正を出さない */
+function CorrectNotice({ doors, canSee }: { doors: DoorsView; canSee: boolean }) {
+  const lastSeen = useRef(doors.correctSeq);
+  const [shown, setShown] = useState({ seq: 0, no: 0 });
+  useEffect(() => {
+    if (doors.correctSeq <= lastSeen.current) return;
+    lastSeen.current = doors.correctSeq;
+    if (!canSee) return;
+    setShown({ seq: doors.correctSeq, no: doors.correctSeqBy });
+    playChime();
+    const timer = window.setTimeout(() => setShown({ seq: 0, no: 0 }), EXTEND_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [doors.correctSeq, doors.correctSeqBy, canSee]);
+  return (
+    <AnimatePresence>
+      {shown.seq > 0 && (
+        <m.div
+          key={shown.seq}
+          className="notice extend-notice"
+          role="status"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0 }}
+        >
+          GMが{shown.no}番の判定を訂正しました
         </m.div>
       )}
     </AnimatePresence>
@@ -237,7 +269,7 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
         )}
       </div>
 
-      <LogList finished={finished} showLie={isGm} />
+      <LogList finished={finished} showLie={isGm} canCorrect={isGm && !doors.isAiGm} liesLeft={doors.maxLies - (doors.liesUsed ?? 0)} act={act} />
     </div>
   );
 }
@@ -342,7 +374,7 @@ function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: Do
       )}
       {blocker && <p className="muted">{blocker}</p>}
       <p className="muted hint-text">
-        提案は、ほかの回答者が1人OKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
+        提案は、提案者以外の回答者全員がOKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
       </p>
     </section>
   );
@@ -364,7 +396,8 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
       <ul className="active-list">
         <AnimatePresence initial={false}>
           {active.map((p) => {
-            const canApprove = !isGm && p.status === 'proposed' && p.authorId !== view.you;
+            const isApproved = p.isApprovedByYou;
+            const canApprove = !isGm && p.status === 'proposed' && p.authorId !== view.you && !isApproved;
             const isAiWorking = p.id === doors.aiBusyId;
             return (
               <m.li
@@ -382,7 +415,8 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
                   <span className="log-author">{p.authorName}</span>
                   <span className={`status-tag status-${p.status}`}>
                     {p.status === 'sent' ? sentLabel(p) : STATUS_LABEL.proposed}
-                    {p.approverName && ` (OK: ${p.approverName})`}
+                    {p.status === 'proposed' && ` ${p.approvalsDone}/${p.approvalsNeeded}`}
+                    {p.approverNames.length > 0 && ` (OK: ${p.approverNames.join('、')})`}
                   </span>
                 </div>
                 <p className="queue-text">{p.text}</p>
@@ -393,7 +427,12 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
                         OK
                       </button>
                     )}
-                    {p.status === 'proposed' && p.authorId === view.you && <span className="muted">ほかの回答者のOK待ち</span>}
+                    {isApproved && p.status === 'proposed' && <span className="muted">OK済み</span>}
+                    {p.status === 'proposed' && p.authorId === view.you && (
+                      <span className="muted">
+                        ほかの回答者のOK待ち ({p.approvalsDone}/{p.approvalsNeeded})
+                      </span>
+                    )}
                     {!isAiWorking && (
                       <button className="small" onClick={() => act('doors:cancel', { id: p.id })}>
                         取り消し
@@ -410,7 +449,8 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
   );
 }
 
-function LogList({ finished, showLie }: { finished: ProposalView[]; showLie: boolean }) {
+function LogList({ finished, showLie, canCorrect, liesLeft, act }: { finished: ProposalView[]; showLie: boolean; canCorrect: boolean; liesLeft: number; act: Act }) {
+  const [editingId, setEditingId] = useState('');
   return (
     <section className="doors-panel">
       <h3>ログ</h3>
@@ -426,7 +466,20 @@ function LogList({ finished, showLie }: { finished: ProposalView[]; showLie: boo
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 360, damping: 26 }}
             >
-              <LogRow p={p} showLie={showLie} />
+              <LogRow
+                p={p}
+                showLie={showLie}
+                action={
+                  canCorrect && p.status === 'answered' && editingId !== p.id ? (
+                    <button className="small" onClick={() => setEditingId(p.id)}>
+                      訂正
+                    </button>
+                  ) : undefined
+                }
+              />
+              {canCorrect && p.status === 'answered' && editingId === p.id && (
+                <CorrectPanel p={p} canLie={liesLeft > 0} act={act} onClose={() => setEditingId('')} />
+              )}
             </m.li>
           ))}
         </AnimatePresence>

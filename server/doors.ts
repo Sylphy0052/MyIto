@@ -30,10 +30,14 @@ interface Proposal {
   isFinal: boolean;
   text: string;
   status: ProposalStatus;
-  approverName: string;
+  /** OKした回答者のIDと名前。名前は退室後も残す */
+  approverIds: string[];
+  approverNames: string[];
   cancelledByName: string;
   reply: DoorsReply | null;
   lie: boolean;
+  /** 訂正前の最初の判定。訂正していなければ null */
+  correctedFrom: DoorsReply | null;
   /** AI GMの正直な回答 (嘘で反転する前)。AIへ渡す履歴に使う */
   honestReply: QuestionReply | null;
   /** AI GMの解答の判定理由。答えを示唆しうるので結果画面まで伏せる */
@@ -64,7 +68,7 @@ function isActive(p: Proposal): boolean {
  * | 操作 | 立場 | フェーズ |
  * | setAnswer | GM | setup |
  * | propose / approve / cancel / requestExtend | 回答者 (GM以外の席) | asking / final |
- * | reply / reject | GM | asking / final |
+ * | reply / reject / correct | GM | asking / final |
  * | extend | ホストかGM | asking / final |
  * | abort | (サーバ内部) | setup / asking / final |
  *
@@ -81,6 +85,10 @@ export class DoorsRound {
   abortReason = '';
   extendRequestSeq = 0;
   extendRequestBy = '';
+  /** 訂正のたびに増える。GM以外の通知に使う */
+  correctSeq = 0;
+  /** 最後に訂正した提案の通し番号 */
+  correctSeqBy = 0;
   /** AI GMの事実メモ。サーバだけが持ち、どのクライアントにも送らない */
   memo = '';
   /** AI GMが答えを決めている、または提案に答えている最中か。お題生成の aiBusy とは別に持つ */
@@ -140,9 +148,15 @@ export class DoorsRound {
     return this.proposals.filter((p) => isActive(p) && !p.isFinal).length;
   }
 
-  /** 承認できる回答者 (接続中・GM以外・提案者以外) の数 */
-  private approverCount(p: Proposal, seats: readonly Seat[]): number {
-    return seats.filter((s) => s.connected && s.id !== this.gmId && s.id !== p.authorId).length;
+  /** 承認が必要な回答者 (接続中・GM以外・提案者以外)。判定のたびに今の席から数える */
+  private approvers(p: Proposal, seats: readonly Seat[]): Seat[] {
+    return seats.filter((s) => s.connected && s.id !== this.gmId && s.id !== p.authorId);
+  }
+
+  /** 承認が必要な人が全員OK済み (または0人) なら、GMへ送る */
+  private promote(p: Proposal, seats: readonly Seat[]): void {
+    if (p.status !== 'proposed') return;
+    if (this.approvers(p, seats).every((s) => p.approverIds.includes(s.id))) p.status = 'sent';
   }
 
   // ---- GMの答え ----
@@ -183,10 +197,12 @@ export class DoorsRound {
       isFinal,
       text,
       status: 'proposed',
-      approverName: '',
+      approverIds: [],
+      approverNames: [],
       cancelledByName: '',
       reply: null,
       lie: false,
+      correctedFrom: null,
       honestReply: null,
       reason: '',
     });
@@ -199,8 +215,10 @@ export class DoorsRound {
     const p = this.find(id);
     if (p.status !== 'proposed') throw new GameError('この提案は承認待ちではありません');
     if (p.authorId === playerId) throw new GameError('自分の提案は承認できません');
-    p.status = 'sent';
-    p.approverName = seat.name;
+    if (p.approverIds.includes(playerId)) throw new GameError('もうOKしています');
+    p.approverIds.push(playerId);
+    p.approverNames.push(seat.name);
+    this.promote(p, seats);
   }
 
   cancel(playerId: string, seats: readonly Seat[], id: unknown): void {
@@ -241,6 +259,30 @@ export class DoorsRound {
       if (isLie) throw new GameError('解答には嘘を付けられません');
     }
     this.record(p, reply as DoorsReply, isLie);
+  }
+
+  /** GMが回答済みの判定を訂正する。回数は変えない。解答を正解に直したら回答者の勝ち */
+  correct(playerId: string, id: unknown, reply: unknown, lie: unknown): void {
+    this.requireGm(playerId);
+    this.requirePlaying();
+    const p = this.find(id);
+    if (p.status !== 'answered' || p.reply === null) throw new GameError('回答済みの提案だけ訂正できます');
+    const isLie = lie === true;
+    if (p.kind === 'question') {
+      if (!QUESTION_REPLIES.includes(reply as never)) throw new GameError('回答を選んでください');
+      if (isLie && this.liesUsed - (p.lie ? 1 : 0) >= this.maxLies) throw new GameError('嘘の回数が残っていません');
+    } else {
+      if (!GUESS_REPLIES.includes(reply as never)) throw new GameError('判定を選んでください');
+      if (isLie) throw new GameError('解答には嘘を付けられません');
+    }
+    if (reply === p.reply && isLie === p.lie) throw new GameError('いまと同じ判定です');
+    this.liesUsed += (isLie ? 1 : 0) - (p.lie ? 1 : 0);
+    p.correctedFrom ??= p.reply;
+    p.reply = reply as DoorsReply;
+    p.lie = isLie;
+    this.correctSeq += 1;
+    this.correctSeqBy = p.seq;
+    if (p.kind === 'guess' && reply === 'correct') this.finish('win');
   }
 
   /** 回答を記録して回数を進める。解答の正解で勝ち、最終解答のそれ以外で負け */
@@ -397,7 +439,7 @@ export class DoorsRound {
     if (!this.isRunning) return;
     if (!seats.some((s) => s.id !== this.gmId)) return this.abort('回答者が全員退室しました');
     for (const p of this.proposals) {
-      if (p.status === 'proposed' && this.approverCount(p, seats) === 0) p.status = 'sent';
+      this.promote(p, seats);
     }
   }
 
@@ -435,7 +477,7 @@ export class DoorsRound {
    * 答え・嘘印・嘘の使用数は、GM本人と結果画面にだけ送る。
    * AI GMの判定理由は結果画面でだけ送り、事実メモはどの画面にも送らない
    */
-  viewFor(viewerId: string): DoorsView {
+  viewFor(viewerId: string, seats: readonly Seat[]): DoorsView {
     const canSeeSecret = viewerId === this.gmId || this.phase === 'doors-result';
     const isResult = this.phase === 'doors-result';
     return {
@@ -460,9 +502,12 @@ export class DoorsRound {
         isFinal: p.isFinal,
         text: p.text,
         status: p.status,
-        approverName: p.approverName,
+        approverNames: p.approverNames,
+        isApprovedByYou: p.approverIds.includes(viewerId),
+        ...this.approvalCounts(p, seats),
         cancelledByName: p.cancelledByName,
         reply: p.reply,
+        correctedFrom: p.correctedFrom,
         lie: canSeeSecret ? p.lie : null,
         reason: isResult && p.reason ? p.reason : null,
       })),
@@ -470,6 +515,18 @@ export class DoorsRound {
       abortReason: this.abortReason,
       extendRequestSeq: this.extendRequestSeq,
       extendRequestBy: this.extendRequestBy,
+      correctSeq: this.correctSeq,
+      correctSeqBy: this.correctSeqBy,
+    };
+  }
+
+  /** 承認待ちの札に出す人数。切断した人のOKは数えない */
+  private approvalCounts(p: Proposal, seats: readonly Seat[]): { approvalsNeeded: number; approvalsDone: number } {
+    if (p.status !== 'proposed') return { approvalsNeeded: 0, approvalsDone: 0 };
+    const needed = this.approvers(p, seats);
+    return {
+      approvalsNeeded: needed.length,
+      approvalsDone: needed.filter((s) => p.approverIds.includes(s.id)).length,
     };
   }
 }
