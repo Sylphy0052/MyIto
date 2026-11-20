@@ -8,3 +8,4 @@
 - [ASK APIのmodelVariant](ask-model-variant.md) — Sonnet 5.5は`claude-55-sonnet-thinking`で通る
 - [Issueの前提は実画面で確かめてから起票する](issue-premise-check-existing-ui.md) — #25は既に実装済みの表示を直す前提だった
 - [検証サーバーでAIモードが使えない](e2e-ai-mode-env.md) — `npm start`は環境変数のファイルを読まない。`ASK_*`を渡す
+- [計算機サーバでPlaywrightの画面確認を回す](e2e-playwright-docker-on-compute-server.md) — 公式imageを非rootで回すときは`HOME`と`TMPDIR=/tmp`を明示する
