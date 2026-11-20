@@ -441,6 +441,7 @@ export class DoorsRound {
       isAiGm: this.isAiGm,
       aiBusy: this.aiBusy,
       aiBusyId: this.aiBusyId,
+      aiFailedId: this.aiFailedId,
       aiError: this.aiError,
       aiErrorSeq: this.aiErrorSeq,
       answer: canSeeSecret ? this.answer : null,

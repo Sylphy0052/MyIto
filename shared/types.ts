@@ -92,6 +92,8 @@ export interface DoorsView {
   aiBusy: boolean;
   /** AI GMが答えている最中の提案。取り消せない。無ければ空 */
   aiBusyId: string;
+  /** 呼出に失敗した提案。ホストが再試行するまで回答待ちのまま残る。無ければ空 */
+  aiFailedId: string;
   /** AI GMの呼出に失敗した理由。ホストが再試行するまで次の提案へ進まない。無ければ空 */
   aiError: string;
   /** 失敗するたびに増える。揺れの演出に使う */
