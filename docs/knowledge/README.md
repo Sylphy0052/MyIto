@@ -6,3 +6,5 @@
 - [z-index -1の背景演出がbodyの背景に隠れる](negative-z-index-behind-body.md) — 親に`isolation: isolate`を付ける
 - [b90で本番の.envを使って新しい版を試す](b90-trial-run-with-env.md) — デプロイ先を複製し、composeのプロジェクト名を分けて動かす
 - [ASK APIのmodelVariant](ask-model-variant.md) — Sonnet 5.5は`claude-55-sonnet-thinking`で通る
+- [Issueの前提は実画面で確かめてから起票する](issue-premise-check-existing-ui.md) — #25は既に実装済みの表示を直す前提だった
+- [検証サーバーでAIモードが使えない](e2e-ai-mode-env.md) — `npm start`は環境変数のファイルを読まない。`ASK_*`を渡す
