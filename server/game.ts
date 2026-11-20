@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  DOORS_AI_MODELS,
   DOORS_DEFAULT_QUESTIONS,
   LIMITS,
   isReadyToOpen,
@@ -13,7 +14,7 @@ import {
 import { randomDoorsTheme, randomTopic } from './topics';
 import { AI_GM_ID, DoorsRound, type Seat } from './doors';
 import { GameError } from './errors';
-import { isAskConfigured } from './ai';
+import { DOORS_MODEL, isAskConfigured } from './ai';
 
 /** AI GMが同じルームで使った答えを覚えておく数。次の答えを決めるときに避けさせる */
 const AI_ANSWER_MEMORY = 30;
@@ -68,7 +69,7 @@ export class Room {
   hostId = '';
   phase: Phase = 'lobby';
   mode: GameMode = 'ito';
-  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0 };
+  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, aiModel: DOORS_MODEL };
   /** 10の扉のラウンド。ロビーでは null。itoのカード・列とは別に持つ */
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
@@ -257,6 +258,8 @@ export class Room {
     if (typeof p.gmId === 'string' && (p.gmId === '' || this.players.some((x) => x.id === p.gmId))) next.gmId = p.gmId;
     if (isIndex(p.questions, LIMITS.doorsMaxQuestions) && p.questions >= 1) next.questions = p.questions;
     if (isIndex(p.maxLies, LIMITS.doorsMaxLies)) next.maxLies = p.maxLies;
+    const model = DOORS_AI_MODELS.find((m) => m === p.aiModel);
+    if (model) next.aiModel = model;
     this.doorsSettings = next;
   }
 

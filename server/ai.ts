@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { LIMITS, type GameMode } from '../shared/types';
+import { DOORS_AI_MODELS, LIMITS, type DoorsAiModel, type GameMode } from '../shared/types';
 
 const TIMEOUT_MS = 30_000;
 const GLOBAL_WINDOW_MS = 60_000;
@@ -27,7 +27,8 @@ const ASK_MODEL = process.env.ASK_MODEL || 'claude-55-sonnet-thinking';
 // 10の扉のAI GM用。実機のASKで確かめた結果、gpt-6.1-luna / gpt-61-luna (各 -thinking 付きも) は400、
 // gpt-6-luna と gpt-6-luna-thinking は200で答えが返った (docs/knowledge/ask-model-variant.md)。
 // 質問の意味の読み取りと解答の判定に推論が効き、応答も約1.7秒で30秒のタイムアウトに収まるので thinking 版を既定にする
-export const DOORS_MODEL = process.env.DOORS_MODEL || 'gpt-6-luna-thinking';
+// 環境変数 DOORS_MODEL は、候補 (DOORS_AI_MODELS) に含まれるときだけ既定値になる
+export const DOORS_MODEL: DoorsAiModel = DOORS_AI_MODELS.find((m) => m === process.env.DOORS_MODEL) ?? 'gpt-6-luna-thinking';
 
 export function sanitizeGenre(raw: unknown): string {
   if (typeof raw !== 'string') return '';

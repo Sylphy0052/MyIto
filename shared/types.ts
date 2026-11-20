@@ -33,6 +33,14 @@ export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
   return phase.startsWith('doors-');
 }
 
+/** AI GMが使えるモデル (ASKのmodelVariant)。実機で200が返った値だけを許可する */
+export const DOORS_AI_MODELS = ['gpt-6-luna-thinking', 'gpt-6-luna'] as const;
+export type DoorsAiModel = (typeof DOORS_AI_MODELS)[number];
+export const DOORS_AI_MODEL_LABEL: Record<DoorsAiModel, string> = {
+  'gpt-6-luna-thinking': 'Luna (考えてから答える・推奨)',
+  'gpt-6-luna': 'Luna (すぐ答える)',
+};
+
 /** ai: AIがGMを務め、参加者全員が回答者になる */
 export type GmPick = 'random' | 'named' | 'ai';
 export type ProposalKind = 'question' | 'guess';
@@ -52,6 +60,8 @@ export interface DoorsSettings {
   gmId: string;
   questions: number;
   maxLies: number;
+  /** gmPick が ai のときに使うモデル */
+  aiModel: DoorsAiModel;
 }
 
 export interface ProposalView {
