@@ -134,6 +134,8 @@ function driveAiGm(room: Room): void {
       round.releaseAi(id);
       if (rooms.get(room.code) !== room) return;
       room.phase = room.doors?.phase ?? room.phase;
+      // AIの回答で手番が動き出す・止まるので、誰も操作しなくても時間切れが起きるよう付け直す
+      room.syncDoorsTimer();
       broadcast(room);
     });
 }

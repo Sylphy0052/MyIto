@@ -81,3 +81,66 @@ export function TimeUpNotice({ doors }: { doors: DoorsView }) {
     </AnimatePresence>
   );
 }
+
+/** 手番の残り。進行中だけ手元の時計で数え直し、止まっている間 (GMの回答待ち) は止める。残り10秒で脈打たせる */
+export function TurnLeft({ doors }: { doors: DoorsView }) {
+  const received = doors.turnLeftMs;
+  const isPaused = doors.isTurnPaused;
+  const base = useMemo(() => ({ left: received, at: performance.now() }), [received]);
+  const [now, setNow] = useState(() => performance.now());
+  const isTicking = received !== null && !isPaused;
+  useEffect(() => {
+    if (!isTicking) return;
+    const timer = window.setInterval(() => setNow(performance.now()), TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [isTicking]);
+
+  if (received === null || doors.turnLimitSec === 0) return null;
+  const left = isPaused ? received : Math.max(0, (base.left ?? received) - (Math.max(now, base.at) - base.at));
+  const tone = !isPaused && left <= URGENT_MS ? 'is-urgent' : '';
+  return (
+    <span className={`time-left turn-left ${tone}`} role="timer" aria-label={`手番の残り時間 ${formatLeft(left)}`}>
+      手番 <strong>{formatLeft(left)}</strong>
+      {isPaused && ' (GMの回答待ち)'}
+    </span>
+  );
+}
+
+/** 手番の時間切れを知らせる。回数が増えたときだけ出す。再接続・リロード直後は出さない。通知音をオンにしている人だけ鳴らす */
+export function TurnTimeoutNotice({ doors }: { doors: DoorsView }) {
+  const [isSoundOn] = useSoundSetting();
+  const isSoundOnRef = useRef(isSoundOn);
+  isSoundOnRef.current = isSoundOn;
+  const seen = useRef(doors.turnTimeoutCount);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (doors.turnTimeoutCount <= seen.current) {
+      seen.current = doors.turnTimeoutCount;
+      return;
+    }
+    seen.current = doors.turnTimeoutCount;
+    setShown((n) => n + 1);
+    if (isSoundOnRef.current) playChime();
+  }, [doors.turnTimeoutCount]);
+  useEffect(() => {
+    if (shown === 0) return;
+    const timer = window.setTimeout(() => setShown(0), TIME_UP_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [shown]);
+  return (
+    <AnimatePresence>
+      {shown > 0 && (
+        <m.div
+          key={shown}
+          className="notice time-up-notice"
+          role="status"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0 }}
+        >
+          手番の時間切れ。質問回数を1つ使いました
+        </m.div>
+      )}
+    </AnimatePresence>
+  );
+}

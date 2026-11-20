@@ -1,5 +1,5 @@
 import { m, type Variants } from 'motion/react';
-import { DOORS_AI_MODELS, DOORS_AI_MODEL_LABEL, DOORS_TIME_LIMITS, LIMITS, type DoorsAiModel, type GameMode, type GmPick, type RoomView } from '../../shared/types';
+import { DOORS_AI_MODELS, DOORS_AI_MODEL_LABEL, DOORS_TIME_LIMITS, DOORS_TURN_LIMITS, LIMITS, type DoorsAiModel, type GameMode, type GmPick, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
 
 export const MODE_LABEL: Record<GameMode, string> = { ito: 'ito', doors: '10の扉' };
@@ -34,6 +34,7 @@ export function DoorsSummary({ view }: { view: RoomView }) {
       <li>質問回数: {s.questions} 回</li>
       <li>嘘の上限: {s.maxLies === 0 ? 'なし' : `最大 ${s.maxLies} 回`}</li>
       <li>制限時間: {s.timeLimitMin === 0 ? 'なし' : `${s.timeLimitMin} 分`}</li>
+      <li>1手番: {s.turnLimitSec === 0 ? 'なし' : `${s.turnLimitSec} 秒`}</li>
       {s.gmPick === 'ai' && <li>AIのモデル: {DOORS_AI_MODEL_LABEL[s.aiModel]}</li>}
     </ul>
   );
@@ -107,6 +108,16 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
           {DOORS_TIME_LIMITS.map((n) => (
             <option key={n} value={n}>
               {n === 0 ? 'なし' : `${n}分`}
+            </option>
+          ))}
+        </select>
+      </m.div>
+      <m.div className="field-row" variants={variants}>
+        <span className="label">1手番</span>
+        <select value={s.turnLimitSec} onChange={(e) => act('doors:settings', { turnLimitSec: Number(e.target.value) })}>
+          {DOORS_TURN_LIMITS.map((n) => (
+            <option key={n} value={n}>
+              {n === 0 ? 'なし' : `${n}秒`}
             </option>
           ))}
         </select>

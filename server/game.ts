@@ -3,6 +3,7 @@ import {
   DOORS_AI_MODELS,
   DOORS_DEFAULT_QUESTIONS,
   DOORS_TIME_LIMITS,
+  DOORS_TURN_LIMITS,
   LIMITS,
   isReadyToOpen,
   type CardState,
@@ -13,7 +14,7 @@ import {
   type TopicSource,
 } from '../shared/types';
 import { randomDoorsTheme, randomTopic } from './topics';
-import { AI_GM_ID, DOORS_MINUTE_MS, DoorsRound, type Seat } from './doors';
+import { AI_GM_ID, DOORS_MINUTE_MS, DOORS_TURN_UNIT_MS, DoorsRound, type Seat } from './doors';
 import { GameError } from './errors';
 import { DOORS_MODEL, isAskConfigured } from './ai';
 
@@ -70,7 +71,7 @@ export class Room {
   hostId = '';
   phase: Phase = 'lobby';
   mode: GameMode = 'ito';
-  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, timeLimitMin: 0, aiModel: DOORS_MODEL };
+  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, timeLimitMin: 0, turnLimitSec: 0, aiModel: DOORS_MODEL };
   /** 10の扉のラウンド。ロビーでは null。itoのカード・列とは別に持つ */
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
@@ -266,6 +267,7 @@ export class Room {
     if (isIndex(p.questions, LIMITS.doorsMaxQuestions) && p.questions >= 1) next.questions = p.questions;
     if (isIndex(p.maxLies, LIMITS.doorsMaxLies)) next.maxLies = p.maxLies;
     if (typeof p.timeLimitMin === 'number' && DOORS_TIME_LIMITS.includes(p.timeLimitMin)) next.timeLimitMin = p.timeLimitMin;
+    if (typeof p.turnLimitSec === 'number' && DOORS_TURN_LIMITS.includes(p.turnLimitSec)) next.turnLimitSec = p.turnLimitSec;
     const model = DOORS_AI_MODELS.find((m) => m === p.aiModel);
     if (model) next.aiModel = model;
     this.doorsSettings = next;
@@ -288,14 +290,14 @@ export class Room {
     if (this.doorsSettings.gmPick === 'ai') {
       if (!isAskConfigured()) throw new GameError('ASK APIの設定が無いため、AIはGMを務められません');
       // 答えは server/index.ts が AI に決めさせる。決まるまでは doors-setup のまま
-      this.doors = new DoorsRound(AI_GM_ID, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs());
+      this.doors = new DoorsRound(AI_GM_ID, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs(), this.turnLimitMs());
       this.round += 1;
       this.notice = 'AIがGMです';
       this.phase = this.doors.phase;
       return;
     }
     const gm = this.pickGm(seated);
-    this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs());
+    this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs(), this.turnLimitMs());
     this.lastGmId = gm.id;
     this.round += 1;
     this.notice = `${gm.name} さんがGMです`;
@@ -306,17 +308,22 @@ export class Room {
     return this.doorsSettings.timeLimitMin * DOORS_MINUTE_MS;
   }
 
+  private turnLimitMs(): number {
+    return (this.doorsSettings.turnLimitSec / 10) * DOORS_TURN_UNIT_MS;
+  }
+
   /** 質問の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
-  private syncDoorsTimer(): void {
+  syncDoorsTimer(): void {
     this.stopDoorsTimer();
     const round = this.doors;
-    if (!round || round.phase !== 'doors-asking' || round.isTimeUp || round.deadlineAt <= 0) return;
+    if (!round) return;
+    const deadline = round.nextDeadline();
+    if (deadline <= 0) return;
     this.doorsTimer = setTimeout(() => {
       this.doorsTimer = null;
       // 別のラウンドに替わっていたり、質問の段階でなくなっていたりしたら何もしない
       if (this.doors !== round || round.phase !== 'doors-asking') return;
-      if (Date.now() < round.deadlineAt) return this.syncDoorsTimer();
-      round.expire();
+      if (!round.fireDeadline()) return this.syncDoorsTimer();
       this.phase = round.phase;
       this.syncDoorsTimer();
       try {
@@ -324,7 +331,7 @@ export class Room {
       } catch (e) {
         console.error('doors time-up broadcast failed', e);
       }
-    }, Math.max(0, round.deadlineAt - Date.now()));
+    }, Math.max(0, deadline - Date.now()));
   }
 
   stopDoorsTimer(): void {
