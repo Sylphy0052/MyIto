@@ -88,7 +88,13 @@ function CandidateList({ view, onPick }: { view: RoomView; onPick?: (index: numb
                 {t}
               </m.button>
             ) : (
-              <span className={isSelected ? 'candidate-static selected' : 'candidate-static'}>{t}</span>
+              <span
+                className={isSelected ? 'candidate-static selected' : 'candidate-static'}
+                aria-current={isSelected || undefined}
+              >
+                {t}
+                {isSelected && <small className="candidate-badge">選択中</small>}
+              </span>
             )}
           </m.li>
         );
@@ -121,16 +127,14 @@ export function Lobby({ view, isHost, act }: Props) {
           })}
         </m.div>
         <m.p variants={rowVariants}>
-          1人 {view.cardsPerPlayer} 枚 / お題 ({SOURCE_LABEL[view.topicSource]}): {view.topic}
+          1人 {view.cardsPerPlayer} 枚 / お題: {SOURCE_LABEL[view.topicSource]}
         </m.p>
-        {view.aiBusy && (
-          <m.p className="muted ai-busy-text" variants={rowVariants}>
-            ホストがAIでお題を生成中...
-          </m.p>
+        {view.topicCandidates.length > 0 && (
+          <m.div variants={rowVariants}>
+            <p className="muted">AIの候補 (選ぶのはホストです)</p>
+            <CandidateList view={view} />
+          </m.div>
         )}
-        <m.div variants={rowVariants}>
-          <CandidateList view={view} />
-        </m.div>
         <m.p className="muted" variants={rowVariants}>
           ホストが開始するのを待っています
           <span className="dots" aria-hidden="true">
