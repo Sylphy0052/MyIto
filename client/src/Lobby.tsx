@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AnimatePresence, m, type Variants } from 'motion/react';
 import { LIMITS, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
+import { DoorsSettingsForm, DoorsSummary, MODE_LABEL, ModeToggle, doorsStartBlocker } from './DoorsLobby';
 
 interface Props {
   view: RoomView;
@@ -107,7 +108,11 @@ export function Lobby({ view, isHost, act }: Props) {
   const [customTopic, setCustomTopic] = useState('');
   const [genre, setGenre] = useState('');
   const seated = view.players.filter((p) => p.connected).length;
-  const canStart = seated >= 2 && seated <= LIMITS.maxPlayers && !view.aiBusy;
+  const isDoors = view.mode === 'doors';
+  const topicLabel = isDoors ? 'テーマ' : 'お題';
+  // 開始ボタンの条件はゲーム種別で変わる。10の扉では指名したGMが接続していること
+  const doorsBlocker = isDoors ? doorsStartBlocker(view) : '';
+  const canStart = seated >= 2 && seated <= LIMITS.maxPlayers && !view.aiBusy && !doorsBlocker;
 
   if (!isHost) {
     return (
@@ -127,8 +132,15 @@ export function Lobby({ view, isHost, act }: Props) {
           })}
         </m.div>
         <m.p variants={rowVariants}>
-          1人 {view.cardsPerPlayer} 枚 / お題: {SOURCE_LABEL[view.topicSource]}
+          ゲーム: <strong>{MODE_LABEL[view.mode]}</strong> /{' '}
+          {isDoors ? '' : `1人 ${view.cardsPerPlayer} 枚 / `}
+          {topicLabel}: {SOURCE_LABEL[view.topicSource]}
         </m.p>
+        {isDoors && (
+          <m.div variants={rowVariants}>
+            <DoorsSummary view={view} />
+          </m.div>
+        )}
         {view.topicCandidates.length > 0 && (
           <m.div variants={rowVariants}>
             <p className="muted">AIの候補 (選ぶのはホストです)</p>
@@ -152,21 +164,31 @@ export function Lobby({ view, isHost, act }: Props) {
   return (
     <m.section className="lobby" variants={rowsVariants} initial="hidden" animate="show">
       <m.div className="field-row" variants={rowVariants}>
-        <span className="label">1人あたりの枚数</span>
-        <select
-          value={view.cardsPerPlayer}
-          onChange={(e) => act('settings', { cardsPerPlayer: Number(e.target.value) })}
-        >
-          {Array.from({ length: LIMITS.maxCardsPerPlayer }, (_, i) => i + 1).map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+        <span className="label">ゲーム</span>
+        <ModeToggle view={view} act={act} />
       </m.div>
+      {isDoors ? (
+        <DoorsSettingsForm view={view} act={act} variants={rowVariants} />
+      ) : (
+        <m.div className="field-row" variants={rowVariants}>
+          <span className="label">1人あたりの枚数</span>
+          <select
+            value={view.cardsPerPlayer}
+            onChange={(e) => act('settings', { cardsPerPlayer: Number(e.target.value) })}
+          >
+            {Array.from({ length: LIMITS.maxCardsPerPlayer }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </m.div>
+      )}
 
       <m.div className="field-row" variants={rowVariants}>
-        <span className="label">お題 ({SOURCE_LABEL[view.topicSource]})</span>
+        <span className="label">
+          {topicLabel} ({SOURCE_LABEL[view.topicSource]})
+        </span>
         <m.button
           disabled={view.aiBusy}
           whileTap={{ rotate: 360, scale: 0.9 }}
@@ -178,7 +200,7 @@ export function Lobby({ view, isHost, act }: Props) {
       </m.div>
       <m.div className="field-row" variants={rowVariants}>
         <input
-          placeholder="お題を自由入力"
+          placeholder={`${topicLabel}を自由入力`}
           value={customTopic}
           maxLength={LIMITS.topic}
           onChange={(e) => setCustomTopic(e.target.value)}
@@ -211,12 +233,17 @@ export function Lobby({ view, isHost, act }: Props) {
           whileTap={{ scale: 0.95 }}
           onClick={() => act('start')}
         >
-          配って開始 (<Count value={seated} />
+          {isDoors ? '開始' : '配って開始'} (<Count value={seated} />
           人)
         </m.button>
       </m.div>
       <AnimatePresence>
         {seated > LIMITS.maxPlayers && <p className="muted">{LIMITS.maxPlayers}人以下になると開始できます</p>}
+        {doorsBlocker && (
+          <m.p key="doors-blocker" className="warn-text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {doorsBlocker}
+          </m.p>
+        )}
         {seated < 2 && (
           <m.p
             className="muted"

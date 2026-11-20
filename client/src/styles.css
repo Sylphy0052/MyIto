@@ -885,3 +885,508 @@ button.ai-busy {
     min-height: 156px;
   }
 }
+
+/* ---- 10の扉 ---- */
+.kind-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.kind-toggle button {
+  border: none;
+  border-radius: 0;
+  min-width: 72px;
+}
+.kind-toggle button.selected {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.settings-summary {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--sp-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2) var(--sp-4);
+  color: var(--text-muted);
+}
+.warn-text {
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+.doors-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.you-tag,
+.lie-tag {
+  margin-left: var(--sp-1);
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+}
+.lie-tag {
+  background: color-mix(in srgb, var(--ng) 30%, var(--surface-2));
+  border-color: var(--ng);
+  font-weight: 700;
+}
+.lie-notice {
+  color: var(--warn);
+  font-size: var(--fs-sm);
+}
+.doors-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.doors-panel h3 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-lg);
+}
+.doors-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--sp-3);
+  align-items: start;
+}
+.doors-columns > .doors-panel {
+  margin-bottom: 0;
+}
+.doors-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0;
+}
+.extend-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sound-toggle,
+.lie-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.lie-toggle {
+  margin-top: var(--sp-2);
+}
+.sound-toggle input,
+.lie-toggle input {
+  min-height: auto;
+}
+.final-guide {
+  background: color-mix(in srgb, var(--warn) 18%, var(--surface));
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+}
+.hint-text {
+  font-size: var(--fs-sm);
+  margin-bottom: 0;
+}
+.abort-button {
+  margin-top: var(--sp-2);
+}
+
+/* 扉 */
+.door-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.door-icons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  perspective: 300px;
+}
+.door-slot {
+  position: relative;
+  display: inline-block;
+  width: 20px;
+  height: 30px;
+  border-radius: 4px 4px 0 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.door-slot.glowing {
+  animation: ready-pulse 1.8s ease-in-out infinite;
+}
+.door {
+  position: absolute;
+  inset: 1px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(160deg, var(--card-back-2), var(--card-back));
+  border: 1px solid var(--border-strong);
+  transform-origin: left center;
+}
+.door::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.door-counter .count {
+  font-size: var(--fs-xl);
+}
+.waiting-door {
+  position: relative;
+  width: 34px;
+  height: 50px;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(160deg, var(--card-back-2), var(--card-back));
+  box-shadow: var(--shadow-sm);
+}
+.waiting-door::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+/* GMの答え */
+.secret-answer {
+  margin-bottom: var(--sp-3);
+}
+.secret-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+}
+.secret-card {
+  display: inline-block;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(160deg, var(--card-face), var(--card-face-2));
+  color: var(--card-ink);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  overflow-wrap: anywhere;
+}
+.secret-card.is-hidden {
+  background: repeating-linear-gradient(45deg, var(--card-back), var(--card-back) 6px, var(--card-back-2) 6px, var(--card-back-2) 12px);
+  color: var(--text-muted);
+}
+
+/* 提案とログ */
+.active-list,
+.queue-list,
+.doors-log {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+.active-item,
+.queue-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+.active-item.status-proposed {
+  border-color: var(--accent);
+  animation: ready-pulse 1.8s ease-in-out infinite;
+}
+.active-item.status-sent {
+  border-style: dashed;
+}
+.queue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.queue-text {
+  margin: var(--sp-1) 0;
+  font-size: var(--fs-lg);
+  overflow-wrap: anywhere;
+}
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.log-seq {
+  min-width: 1.6em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.log-author {
+  color: var(--text-muted);
+  margin-right: var(--sp-2);
+}
+.kind-tag,
+.status-tag {
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.kind-tag.kind-guess {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.kind-tag.kind-final {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: #3b2f00;
+  font-weight: 700;
+}
+.status-tag.status-cancelled,
+.status-tag.status-rejected,
+.status-tag.status-discarded {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+.log-item {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.log-item.status-cancelled .log-text,
+.log-item.status-rejected .log-text,
+.log-item.status-discarded .log-text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.log-item .kind-tag {
+  justify-self: start;
+}
+.log-text {
+  overflow-wrap: anywhere;
+}
+.log-result {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+/* GMの回答 */
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.queue-badge {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  border-radius: 999px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+}
+.queue-badge.has-items {
+  background: var(--ng);
+  border-color: var(--ng);
+  color: #2a0a0a;
+}
+.reply-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.reply-button {
+  min-height: 40px;
+}
+.reply-button.tone-ok {
+  border-color: var(--ok);
+}
+.reply-button.tone-ng {
+  border-color: var(--ng);
+}
+.reply-button.tone-warn {
+  border-color: var(--warn);
+}
+.reply-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.reply-badge.tone-ok {
+  background: color-mix(in srgb, var(--ok) 25%, var(--surface-2));
+  border-color: var(--ok);
+}
+.reply-badge.tone-ng {
+  background: color-mix(in srgb, var(--ng) 25%, var(--surface-2));
+  border-color: var(--ng);
+}
+.reply-badge.tone-warn {
+  background: color-mix(in srgb, var(--warn) 25%, var(--surface-2));
+  border-color: var(--warn);
+}
+.reply-badge.large {
+  font-size: var(--fs-xxl);
+  padding: var(--sp-1) var(--sp-4);
+}
+.reply-symbol {
+  font-weight: 900;
+}
+.latest-reply {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--sp-3);
+}
+.latest-reply-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.latest-reply-card.ok-glow {
+  animation: ok-glow 0.9s ease-out both;
+}
+.latest-reply-card.ng-shake {
+  animation: ng-shake 0.5s ease-in-out both;
+}
+.latest-reply-card.warn-pulse {
+  animation: warn-pulse 1.2s ease-in-out 2;
+}
+@keyframes warn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--warn);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px var(--warn),
+      0 0 24px 8px color-mix(in srgb, var(--warn) 45%, transparent);
+  }
+}
+
+/* 結果 */
+.doors-result {
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+.doors-result h2 {
+  text-align: center;
+}
+.result-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.answer-reveal,
+.lie-reveal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-3);
+}
+.lie-reveal ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--sp-1);
+  perspective: 600px;
+}
+.lie-item {
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--ng);
+}
+.result-log {
+  position: relative;
+  margin-bottom: var(--sp-3);
+}
+.result-actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-slot.glowing,
+  .active-item.status-proposed,
+  .latest-reply-card.ok-glow,
+  .latest-reply-card.ng-shake,
+  .latest-reply-card.warn-pulse {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .doors-columns {
+    grid-template-columns: 1fr;
+  }
+  .doors-panel {
+    padding: var(--sp-3);
+  }
+  .reply-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .reply-button {
+    padding: var(--sp-1) var(--sp-2);
+  }
+  .log-item {
+    grid-template-columns: auto 1fr;
+  }
+  .log-item .log-text,
+  .log-item .log-result {
+    grid-column: 1 / -1;
+  }
+  .doors-panel .field-row input {
+    min-width: 0;
+  }
+}
