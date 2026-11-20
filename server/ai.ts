@@ -3,13 +3,19 @@ import { LIMITS, type GameMode } from '../shared/types';
 
 const TIMEOUT_MS = 30_000;
 const GLOBAL_WINDOW_MS = 60_000;
-const GLOBAL_MAX_CALLS = 30;
+/**
+ * 1分あたりの呼出の上限 (全ルーム共有)。
+ * 10の扉のAI GMは1ラウンドで質問・解答ごとに呼ぶ (1件あたり数秒) ので、1ルームでも1分に十数回に届く。
+ * お題生成と同じ枠では、2ルームが同時に遊ぶとお題生成ごと止まるため、枠を分ける
+ */
+const MAX_CALLS: Record<AiBucket, number> = { topic: 30, doors: 60 };
 const MAX_OUTPUT_CHARS = 2_000;
 // 改行の来ない1行をため続けないための上限
 const MAX_LINE_CHARS = 64_000;
 const MAX_ERROR_DETAIL_CHARS = 200;
 
-let globalCalls: number[] = [];
+export type AiBucket = 'topic' | 'doors';
+const calls: Record<AiBucket, number[]> = { topic: [], doors: [] };
 
 // 社内の ASK API (NoteDock と同じ窓口)。キーと projectId が無ければ AI 生成は使わない。
 // compose は未設定の変数も空文字で渡すので、既定値は ?? ではなく || で当てる
@@ -18,6 +24,10 @@ const ASK_API_KEY = (process.env.ASK_API_KEY ?? '').trim();
 const ASK_PROJECT_ID = Number(process.env.ASK_PROJECT_ID || '');
 // Sonnet 系は thinking 版だけが通る (非 thinking 版は ASK 側のプロンプトキャッシュの不具合で失敗する)
 const ASK_MODEL = process.env.ASK_MODEL || 'claude-55-sonnet-thinking';
+// 10の扉のAI GM用。実機のASKで確かめた結果、gpt-6.1-luna / gpt-61-luna (各 -thinking 付きも) は400、
+// gpt-6-luna と gpt-6-luna-thinking は200で答えが返った (docs/knowledge/ask-model-variant.md)。
+// 質問の意味の読み取りと解答の判定に推論が効き、応答も約1.7秒で30秒のタイムアウトに収まるので thinking 版を既定にする
+export const DOORS_MODEL = process.env.DOORS_MODEL || 'gpt-6-luna-thinking';
 
 export function sanitizeGenre(raw: unknown): string {
   if (typeof raw !== 'string') return '';
@@ -28,12 +38,15 @@ export function sanitizeGenre(raw: unknown): string {
 }
 
 /** 制限に掛かるなら理由を返す。掛からなければ呼出を記録して null を返す */
-export function acquireAiSlot(now = Date.now()): string | null {
-  globalCalls = globalCalls.filter((t) => now - t < GLOBAL_WINDOW_MS);
-  if (globalCalls.length >= GLOBAL_MAX_CALLS) {
-    return `AI生成の全体の上限 (1分に${GLOBAL_MAX_CALLS}回) に達しました`;
+export function acquireAiSlot(bucket: AiBucket = 'topic', now = Date.now()): string | null {
+  const recent = calls[bucket].filter((t) => now - t < GLOBAL_WINDOW_MS);
+  const max = MAX_CALLS[bucket];
+  if (recent.length >= max) {
+    calls[bucket] = recent;
+    const label = bucket === 'doors' ? '10の扉のAI' : 'AI生成';
+    return `${label}の全体の上限 (1分に${max}回) に達しました`;
   }
-  globalCalls = [...globalCalls, now];
+  calls[bucket] = [...recent, now];
   return null;
 }
 
@@ -41,6 +54,11 @@ export function acquireAiSlot(now = Date.now()): string | null {
 const SECRET_LIKE = /sk-ant-[\w-]+|[A-Za-z0-9_\-+/=]{32,}/gi;
 // test 用。g 付きの正規表現を test に使うと lastIndex が残るので分ける
 const HAS_SECRET_LIKE = new RegExp(SECRET_LIKE.source, 'i');
+
+/** タグやトークンらしき文字列を含むか。AIの出力を配信してよいかの判定に使う */
+export function looksUnsafe(text: string): boolean {
+  return /[<>]/.test(text) || HAS_SECRET_LIKE.test(text);
+}
 
 /** ログに出す前に、トークンやキーらしき文字列を伏せる */
 function maskSecrets(text: string): string {
@@ -118,7 +136,7 @@ function normalizeTopics(output: string): string[] {
   return [...new Set(topics)].slice(0, LIMITS.aiCandidates);
 }
 
-interface Answer {
+export interface Answer {
   message: string;
   /** JSON として読めなかった行の数。本文が空のときの原因の手掛かりにする */
   skippedLines: number;
@@ -193,8 +211,16 @@ async function readHead(body: ReadableStream<Uint8Array> | null, minChars: numbe
   return text;
 }
 
-/** ASK API でお題 (10の扉ではテーマ) の候補を最大 LIMITS.aiCandidates 個作る。1つも作れなければ Error を投げる */
-export async function generateTopics(genre: string, mode: GameMode = 'ito'): Promise<string[]> {
+/** ASK API を使えるか。10の扉のAI GMは内蔵リストへ切り替えられないので、使えなければロビーで選べなくする */
+export function isAskConfigured(): boolean {
+  return configProblems.length === 0;
+}
+
+/**
+ * ASK API へ1回だけ問い合わせ、本文を返す。毎回新しい chatId を使うので履歴は持たない。
+ * template は system prompt、userInput は利用者由来のデータ。TIMEOUT_MS を超えたら Error を投げる
+ */
+export async function askChat(template: string, userInput: string, model: string): Promise<Answer> {
   if (configProblems.length > 0) {
     throw new Error(`ASK API is not configured: ${configProblems.join(', ')}`);
   }
@@ -212,9 +238,9 @@ export async function generateTopics(genre: string, mode: GameMode = 'ito'): Pro
         action: 'new',
         projectId: ASK_PROJECT_ID,
         chatId: randomUUID(),
-        userInput: buildUserInput(genre),
-        template: TEMPLATES[mode],
-        modelVariant: ASK_MODEL,
+        userInput,
+        template,
+        modelVariant: model,
         dataSourceItems: [],
         chatFileIds: [],
         parentId: null,
@@ -232,20 +258,25 @@ export async function generateTopics(genre: string, mode: GameMode = 'ito'): Pro
       throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail).slice(0, MAX_ERROR_DETAIL_CHARS)}`);
     }
     if (!res.body) throw new Error('ASK API returned no body');
-    const { message, skippedLines, truncated } = await readAnswer(res.body);
-    // 打ち切った応答は最終行が途中で切れているので捨てる
-    // 改行が無ければ1行だけなので、normalizeTopic の文字数制限に任せる
-    const lastBreak = message.lastIndexOf('\n');
-    const body = truncated && lastBreak >= 0 ? message.slice(0, lastBreak + 1) : message;
-    const topics = normalizeTopics(body);
-    if (topics.length === 0) {
-      throw new Error(`ASK API returned no usable topic (unparsed lines: ${skippedLines})`);
-    }
-    return topics;
+    return await readAnswer(res.body);
   } catch (e) {
     if (controller.signal.aborted) throw new Error('ASK API timed out');
     throw e;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** ASK API でお題 (10の扉ではテーマ) の候補を最大 LIMITS.aiCandidates 個作る。1つも作れなければ Error を投げる */
+export async function generateTopics(genre: string, mode: GameMode = 'ito'): Promise<string[]> {
+  const { message, skippedLines, truncated } = await askChat(TEMPLATES[mode], buildUserInput(genre), ASK_MODEL);
+  // 打ち切った応答は最終行が途中で切れているので捨てる
+  // 改行が無ければ1行だけなので、normalizeTopic の文字数制限に任せる
+  const lastBreak = message.lastIndexOf('\n');
+  const body = truncated && lastBreak >= 0 ? message.slice(0, lastBreak + 1) : message;
+  const topics = normalizeTopics(body);
+  if (topics.length === 0) {
+    throw new Error(`ASK API returned no usable topic (unparsed lines: ${skippedLines})`);
+  }
+  return topics;
 }

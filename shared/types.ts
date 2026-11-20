@@ -33,7 +33,8 @@ export function isDoorsPhase(phase: Phase): phase is DoorsPhase {
   return phase.startsWith('doors-');
 }
 
-export type GmPick = 'random' | 'named';
+/** ai: AIがGMを務め、参加者全員が回答者になる */
+export type GmPick = 'random' | 'named' | 'ai';
 export type ProposalKind = 'question' | 'guess';
 /** proposed: 承認待ち / sent: GMへ送信済み / discarded: 終了時に未処理のまま破棄 */
 export type ProposalStatus = 'proposed' | 'sent' | 'answered' | 'rejected' | 'cancelled' | 'discarded';
@@ -69,10 +70,22 @@ export interface ProposalView {
   reply: DoorsReply | null;
   /** 嘘印。GM本人と結果画面にだけ入る。それ以外は null */
   lie: boolean | null;
+  /** AI GMの解答の判定理由。結果画面にだけ入る。それ以外は null */
+  reason: string | null;
 }
 
 export interface DoorsView {
   gmId: string;
+  /** AIがGMを務めているか */
+  isAiGm: boolean;
+  /** AI GMが答えを決めている、または提案に答えている最中か */
+  aiBusy: boolean;
+  /** AI GMが答えている最中の提案。取り消せない。無ければ空 */
+  aiBusyId: string;
+  /** AI GMの呼出に失敗した理由。ホストが再試行するまで次の提案へ進まない。無ければ空 */
+  aiError: string;
+  /** 失敗するたびに増える。揺れの演出に使う */
+  aiErrorSeq: number;
   /** GM本人と結果画面にだけ入る。それ以外は null */
   answer: string | null;
   /** 延長を含めた質問回数 */
@@ -119,6 +132,8 @@ export interface RoomView {
   /** 直近のAI生成で出たお題の候補。ホストがここから選ぶ */
   topicCandidates: string[];
   aiBusy: boolean;
+  /** ASK API の設定があり、AIを使えるか。無ければ10の扉のAI GMを選べない */
+  aiAvailable: boolean;
   notice: string;
   round: number;
   players: PlayerView[];

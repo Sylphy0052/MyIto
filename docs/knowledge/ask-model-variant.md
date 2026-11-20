@@ -11,6 +11,11 @@ updated: 2026-10-30
 - Sonnet 5.5の`modelVariant`の値は、参照したNoteDockの定義に無かった。命名規則 (`claude-45-sonnet-thinking`、`claude-46-sonnet-thinking`、`claude-5-sonnet-thinking`) から`claude-55-sonnet-thinking`と推測した
 - 2026-10-30にb90から本物のASK APIへ送り、お題が返った (`TOPIC 怖い妖怪の強さ 1728ms`)
 
+### GPT-6.1-Luna (10の扉のAI GM)
+
+- 実機のASK APIへ送った結果 (b90でデプロイ先を複製し、別のcomposeプロジェクトから送った)。`gpt-6.1-luna`・`gpt-61-luna`と、それぞれの`-thinking`付きはすべて400。`gpt-6-luna`と`gpt-6-luna-thinking`は200で答えが返った。応答は約1.7秒
+- `DOORS_MODEL`の既定値は`gpt-6-luna-thinking`。質問の意味の読み取りと解答の判定に推論が効き、30秒のタイムアウトに収まるため。値を変えるときは`.env`の`DOORS_MODEL`で上書きする
+
 ## なぜ
 
 - NoteDock側の記録では、ASKは使えない値に400を返し、Sonnet系のthinkingが付かない版はストリームの途中でプロンプトキャッシュのエラーになる。400にならず本文が返ったので、この値は受け付けられている

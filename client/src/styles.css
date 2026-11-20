@@ -817,6 +817,45 @@ button.ai-busy {
     background-position: -200% 0;
   }
 }
+/* AI GMの考え中。ボタンの ai-busy と同じ光の流れを枠に掛ける */
+.busy-shimmer,
+.active-item.busy-shimmer {
+  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--accent) 30%, var(--surface-2)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+}
+.busy-shimmer {
+  animation: busy-shimmer 1.6s linear infinite;
+}
+.ai-setup {
+  border-radius: var(--radius-sm);
+}
+.ai-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  margin-bottom: var(--sp-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+.waiting-door.small-door {
+  width: 18px;
+  height: 26px;
+}
+.ai-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  border-color: var(--ng);
+  animation: ng-shake 0.5s ease-in-out both;
+}
+.retry-button {
+  animation: ready-pulse 1.4s ease-in-out infinite;
+}
+.reply-reason {
+  display: block;
+}
 
 /* 結果 */
 .result h2.perfect {
@@ -1360,7 +1399,10 @@ button.ai-busy {
   .active-item.status-proposed,
   .latest-reply-card.ok-glow,
   .latest-reply-card.ng-shake,
-  .latest-reply-card.warn-pulse {
+  .latest-reply-card.warn-pulse,
+  .busy-shimmer,
+  .ai-error,
+  .retry-button {
     animation: none;
   }
 }

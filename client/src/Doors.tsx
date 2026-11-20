@@ -28,7 +28,7 @@ const PHASE_MOTION = {
 export function Doors({ view, isHost, act }: Props) {
   const doors = view.doors!;
   const isGm = view.you === doors.gmId;
-  const gmName = view.players.find((p) => p.id === doors.gmId)?.name ?? '(退室)';
+  const gmName = doors.isAiGm ? 'AI' : (view.players.find((p) => p.id === doors.gmId)?.name ?? '(退室)');
   const isRunning = view.phase !== 'doors-result';
   // 結果の演出は、その場で結果画面へ進んだときだけ出す。リロード・再接続・途中参加では出さない
   const [flow, setFlow] = useState({ phase: view.phase, isJustFinished: false });
@@ -50,10 +50,13 @@ export function Doors({ view, isHost, act }: Props) {
         </span>
         {view.phase !== 'doors-setup' && <DoorRow doors={doors} isFinal={view.phase === 'doors-final'} />}
         {doors.maxLies > 0 && !isGm && isRunning && (
-          <span className="lie-notice">GMは最大{doors.maxLies}回嘘をつくことがあります</span>
+          <span className="lie-notice">
+            {doors.isAiGm ? 'AI' : 'GM'}は最大{doors.maxLies}回嘘をつくことがあります
+          </span>
         )}
       </div>
       <ExtendRequestNotice doors={doors} canSee={isHost || isGm} />
+      {isRunning && doors.isAiGm && <AiStatus doors={doors} isHost={isHost} act={act} />}
       {isGm && isRunning && doors.answer && <SecretAnswer answer={doors.answer} />}
       {/* フェーズが切り替わっても、直前の回答を出し続けるため外に置く */}
       {isRunning && <LatestReply doors={doors} />}
@@ -108,11 +111,51 @@ function ExtendRequestNotice({ doors, canSee }: { doors: DoorsView; canSee: bool
   );
 }
 
+/** AI GMの様子。考え中は揺れる扉を、失敗したら揺れで知らせてホストに再試行を促す */
+function AiStatus({ doors, isHost, act }: { doors: DoorsView; isHost: boolean; act: Act }) {
+  if (doors.aiError) {
+    return (
+      <div key={doors.aiErrorSeq} className="notice ai-error ng-shake" role="alert">
+        <span>{doors.aiError}</span>
+        {isHost ? (
+          <button className="primary retry-button" onClick={() => act('doors:ai-retry')}>
+            再試行
+          </button>
+        ) : (
+          <span className="muted">ホストの再試行を待っています</span>
+        )}
+      </div>
+    );
+  }
+  if (!doors.aiBusy || !doors.aiBusyId) return null;
+  return <ThinkingBadge text="AIが回答を考え中" />;
+}
+
+/** 考え中を示す小さな揺れる扉 */
+function ThinkingBadge({ text }: { text: string }) {
+  return (
+    <div className="ai-thinking busy-shimmer" role="status">
+      <m.span
+        className="waiting-door small-door"
+        aria-hidden="true"
+        animate={{ rotate: [-8, 8, -8] }}
+        transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <span>{text}</span>
+    </div>
+  );
+}
+
 function SetupPhase({ view, isGm, isHost, act }: { view: RoomView; isGm: boolean; isHost: boolean; act: Act }) {
   const [answer, setAnswer] = useState('');
+  const doors = view.doors!;
   return (
     <section className="doors-panel">
-      {isGm ? (
+      {doors.isAiGm ? (
+        <div className="busy-shimmer ai-setup">
+          <WaitingDoors text="AIが答えを考え中" />
+        </div>
+      ) : isGm ? (
         <>
           <h3>あなたがGMです</h3>
           <p>
@@ -140,7 +183,9 @@ function SetupPhase({ view, isGm, isHost, act }: { view: RoomView; isGm: boolean
       ) : (
         <WaitingDoors text="GMが答えを考え中" />
       )}
-      {isHost && <p className="muted">GMの答えを待つ間も、ホストは下のボタンでロビーへ戻せます。</p>}
+      {isHost && (
+        <p className="muted">{doors.isAiGm ? 'AI' : 'GM'}の答えを待つ間も、ホストは下のボタンでロビーへ戻せます。</p>
+      )}
     </section>
   );
 }
@@ -164,7 +209,7 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
 
       <div className="doors-columns">
         {isGm ? <GmQueue doors={doors} act={act} /> : <ProposalForm view={view} doors={doors} isFinal={isFinal} act={act} />}
-        <ActiveList view={view} active={isGm ? active.filter((p) => p.status === 'proposed') : active} isGm={isGm} act={act} />
+        <ActiveList view={view} doors={doors} active={isGm ? active.filter((p) => p.status === 'proposed') : active} isGm={isGm} act={act} />
       </div>
 
       <div className="doors-controls">
@@ -297,14 +342,20 @@ function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: Do
       )}
       {blocker && <p className="muted">{blocker}</p>}
       <p className="muted hint-text">
-        提案は、ほかの回答者が1人OKするとGMへ届きます。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
+        提案は、ほかの回答者が1人OKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
       </p>
     </section>
   );
 }
 
 /** 処理中の提案。承認待ちは枠が脈打ち、OKが付くとGMの列へ送られるように動き、取り消すと縮んで消える */
-function ActiveList({ view, active, isGm, act }: { view: RoomView; active: ProposalView[]; isGm: boolean; act: Act }) {
+function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors: DoorsView; active: ProposalView[]; isGm: boolean; act: Act }) {
+  // AI GMは送信済みを古い順に1件ずつ答える。答えている1件は「回答待ち」で取り消せず、残りは順番待ち
+  const sentLabel = (p: ProposalView): string => {
+    if (!doors.isAiGm) return `→ ${STATUS_LABEL.sent}`;
+    if (p.id === doors.aiBusyId) return '→ 回答待ち (AIが考え中)';
+    return '→ AIの順番待ち';
+  };
   return (
     <section className="doors-panel">
       <h3>処理中の提案</h3>
@@ -313,11 +364,12 @@ function ActiveList({ view, active, isGm, act }: { view: RoomView; active: Propo
         <AnimatePresence initial={false}>
           {active.map((p) => {
             const canApprove = !isGm && p.status === 'proposed' && p.authorId !== view.you;
+            const isAiWorking = p.id === doors.aiBusyId;
             return (
               <m.li
                 key={p.id}
                 layout="position"
-                className={`active-item status-${p.status}`}
+                className={`active-item status-${p.status} ${isAiWorking ? 'busy-shimmer' : ''}`}
                 initial={{ opacity: 0, y: 16, scale: 0.9 }}
                 animate={p.status === 'sent' ? { opacity: 1, y: 0, scale: 1, x: [0, 14, 0] } : { opacity: 1, y: 0, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.6 }}
@@ -328,7 +380,7 @@ function ActiveList({ view, active, isGm, act }: { view: RoomView; active: Propo
                   <span className={`kind-tag kind-${p.isFinal ? 'final' : p.kind}`}>{kindLabel(p.kind, p.isFinal)}</span>
                   <span className="log-author">{p.authorName}</span>
                   <span className={`status-tag status-${p.status}`}>
-                    {p.status === 'sent' ? `→ ${STATUS_LABEL.sent}` : STATUS_LABEL.proposed}
+                    {p.status === 'sent' ? sentLabel(p) : STATUS_LABEL.proposed}
                     {p.approverName && ` (OK: ${p.approverName})`}
                   </span>
                 </div>
@@ -341,9 +393,11 @@ function ActiveList({ view, active, isGm, act }: { view: RoomView; active: Propo
                       </button>
                     )}
                     {p.status === 'proposed' && p.authorId === view.you && <span className="muted">ほかの回答者のOK待ち</span>}
-                    <button className="small" onClick={() => act('doors:cancel', { id: p.id })}>
-                      取り消し
-                    </button>
+                    {!isAiWorking && (
+                      <button className="small" onClick={() => act('doors:cancel', { id: p.id })}>
+                        取り消し
+                      </button>
+                    )}
                   </div>
                 )}
               </m.li>

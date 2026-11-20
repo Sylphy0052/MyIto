@@ -11,8 +11,12 @@ import {
   type TopicSource,
 } from '../shared/types';
 import { randomDoorsTheme, randomTopic } from './topics';
-import { DoorsRound, type Seat } from './doors';
+import { AI_GM_ID, DoorsRound, type Seat } from './doors';
 import { GameError } from './errors';
+import { isAskConfigured } from './ai';
+
+/** AI GMが同じルームで使った答えを覚えておく数。次の答えを決めるときに避けさせる */
+const AI_ANSWER_MEMORY = 30;
 
 export { GameError };
 
@@ -69,6 +73,8 @@ export class Room {
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
   lastGmId = '';
+  /** AI GMがこのルームで使った答え (古い順) */
+  aiAnswers: string[] = [];
   cardsPerPlayer = 1;
   topic = randomTopic();
   topicSource: TopicSource = 'random';
@@ -152,7 +158,7 @@ export class Room {
 
   /** GMが猶予を過ぎても切断したままなら、ラウンドを中止する (答えを知らない人へGMを移せないため) */
   abortIfGmAway(now = Date.now()): boolean {
-    if (!this.doors?.isRunning) return false;
+    if (!this.doors?.isRunning || this.doors.isAiGm) return false;
     const gm = this.players.find((p) => p.id === this.doors!.gmId);
     if (gm && (gm.connected || now - (gm.awaySince ?? now) < GM_GRACE_MS)) return false;
     this.doors.abort('GMが30秒以上切断しました');
@@ -244,6 +250,10 @@ export class Room {
     if (this.phase !== 'lobby') throw new GameError('ロビーでだけ変更できます');
     const next = { ...this.doorsSettings };
     if (p.gmPick === 'random' || p.gmPick === 'named') next.gmPick = p.gmPick;
+    if (p.gmPick === 'ai') {
+      if (!isAskConfigured()) throw new GameError('ASK APIの設定が無いため、AIはGMを務められません');
+      next.gmPick = 'ai';
+    }
     if (typeof p.gmId === 'string' && (p.gmId === '' || this.players.some((x) => x.id === p.gmId))) next.gmId = p.gmId;
     if (isIndex(p.questions, LIMITS.doorsMaxQuestions) && p.questions >= 1) next.questions = p.questions;
     if (isIndex(p.maxLies, LIMITS.doorsMaxLies)) next.maxLies = p.maxLies;
@@ -264,6 +274,15 @@ export class Room {
   }
 
   private startDoors(seated: readonly Player[]): void {
+    if (this.doorsSettings.gmPick === 'ai') {
+      if (!isAskConfigured()) throw new GameError('ASK APIの設定が無いため、AIはGMを務められません');
+      // 答えは server/index.ts が AI に決めさせる。決まるまでは doors-setup のまま
+      this.doors = new DoorsRound(AI_GM_ID, this.doorsSettings.questions, this.doorsSettings.maxLies);
+      this.round += 1;
+      this.notice = 'AIがGMです';
+      this.phase = this.doors.phase;
+      return;
+    }
     const gm = this.pickGm(seated);
     this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies);
     this.lastGmId = gm.id;
@@ -290,7 +309,9 @@ export class Room {
     if (this.phase !== 'lobby') throw new GameError('すでに始まっています');
     if (this.aiBusy) throw new GameError('AIがお題を考え中です');
     const seated = this.players.filter((p) => p.connected);
-    if (seated.length < 2) throw new GameError('2人以上で始めてください');
+    // AIがGMなら、参加者全員が回答者になるので1人でも遊べる
+    const minPlayers = this.mode === 'doors' && this.doorsSettings.gmPick === 'ai' ? 1 : 2;
+    if (seated.length < minPlayers) throw new GameError('2人以上で始めてください');
     if (seated.length > LIMITS.maxPlayers) throw new GameError(`${LIMITS.maxPlayers}人以下で始めてください`);
     if (this.mode === 'doors') return this.startDoors(seated);
     const total = seated.length * this.cardsPerPlayer;
@@ -328,6 +349,22 @@ export class Room {
     this.order = [];
     this.revealed = 0;
     this.notice = '';
+  }
+
+  /** AI GMが決めた答えを確定し、次のラウンドで避けられるよう覚える */
+  setAiAnswer(round: DoorsRound, answer: string, memo: string): void {
+    round.setAiAnswer(answer, memo);
+    this.aiAnswers = [...this.aiAnswers, answer].slice(-AI_ANSWER_MEMORY);
+    this.phase = round.phase;
+  }
+
+  /** AI GMが答えを決められなかった。ロビーへ戻して知らせる (内蔵リストへは切り替えない) */
+  failAiAnswer(round: DoorsRound): void {
+    round.endAiAnswer();
+    if (this.doors !== round || round.phase !== 'doors-setup') return;
+    this.doors = null;
+    this.phase = 'lobby';
+    this.notice = 'AIが答えを決められなかったので、ロビーに戻りました。もう一度開始してください';
   }
 
   // ---- カード ----
@@ -426,6 +463,7 @@ export class Room {
       topicSource: this.topicSource,
       topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
+      aiAvailable: isAskConfigured(),
       notice: this.notice,
       round: this.round,
       players: this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected })),

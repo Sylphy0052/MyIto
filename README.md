@@ -39,6 +39,18 @@ GM (出題者) がテーマに沿った答えを1つ秘密に決め、ほかの�
 - 回答者が全員退室すると、ラウンドは中止になる
 - 途中から入った人は回答者に加わる
 
+### AIがGMを務める
+
+GMの決め方で「AI」を選ぶと、AIがテーマから答えを1つ決め、参加者全員が回答者になる。1人でも遊べる。ASK APIの設定 (下の「デプロイ」) が無いサーバでは選べない。
+
+- 開始するとAIが答えを決める。決められなかったらロビーへ戻る。同じルームで前に使った答えは避ける
+- 提案と承認の流れは同じ (回答者が1人なら承認は自動で通る)。承認された提案は古い順に1件ずつAIが答える。AIが答えている提案は取り消せない
+- 質問には5段階、解答には正解 / おしい / 不正解で答える。表記ゆれ・同義語は正解、上位・下位の分類や関連の深いものは「おしい」。最終解答では「おしい」も負け
+- 嘘の上限が1以上なら、サーバが上限の範囲でAIの回答を反転させる (分からないは反転しない)。どれが嘘かは結果画面で公開する
+- 解答の判定理由は結果画面でだけ出る
+- AIの応答に失敗したら (30秒のタイムアウトを含む)、回数は減らず、ホストが「再試行」できる
+- 延長の+1 / -1はホストが押す
+
 リロードしても同じ席に戻る。サーバを再起動すると全ルームが消える。
 
 ## 開発
@@ -55,7 +67,7 @@ npm run build && npm start   # http://localhost:47213
 docker compose up -d --build
 ```
 
-AIお題 (10の扉ではテーマ) は社内のASK API (NoteDockと同じ窓口) で作る。10の扉のために足した環境変数は無い。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_KEY`か`ASK_PROJECT_ID`が無ければ、AI生成は内蔵リストのお題に切り替わる。
+AIお題 (10の扉ではテーマ) と10の扉のAI GMは、社内のASK API (NoteDockと同じ窓口) を使う。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_KEY`か`ASK_PROJECT_ID`が無ければ、AI生成は内蔵リストのお題に切り替わり、10の扉のAI GMは選べなくなる。
 
 ```sh
 ASK_API_KEY=<APIキー>
@@ -63,6 +75,10 @@ ASK_PROJECT_ID=<プロジェクトID>
 # 省略時の値
 # ASK_API_URL=https://langchaindemo.heroz.jp
 # ASK_MODEL=claude-55-sonnet-thinking
+# 10の扉のAI GMのモデル (ASKのmodelVariant)
+# DOORS_MODEL=gpt-6-luna-thinking
 ```
+
+10の扉のAI GMの既定は`gpt-6-luna-thinking`。実機のASK APIで確かめた結果は次のとおり。`gpt-6.1-luna`・`gpt-61-luna` (各`-thinking`付きも) は400、`gpt-6-luna`と`gpt-6-luna-thinking`は200で答えが返った。通らない値を書くと、AI GMは答えを決められずロビーへ戻る (ログに`AI doors answer failed: ASK API returned 400: ...`が出る)。
 
 `claude-home` volumeは不要になった。旧構成から移すときは`docker volume rm`で消してよい。

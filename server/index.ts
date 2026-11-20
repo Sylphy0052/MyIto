@@ -8,6 +8,9 @@ import { LIMITS, type Ack } from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { acquireAiSlot, generateTopics, sanitizeGenre } from './ai';
+import type { DoorsRound } from './doors';
+import { answerQuestion, generateSecretAnswer, judgeGuess, type HistoryItem, type Judgement, type SecretAnswer } from './doorsAi';
+import { normalizeText } from '../shared/normalize';
 
 const PORT = Number(process.env.PORT ?? 47213);
 const REVEAL_INTERVAL_MS = 1_200;
@@ -63,11 +66,92 @@ type GameSocket = Socket<any, any, any, SocketData>;
 
 function broadcast(room: Room): void {
   room.lastActiveAt = Date.now();
+  // 状態が変わるたびに、AI GMが次にすることがあるかを見る。処理中の印は配信の前に付ける
+  driveAiGm(room);
   for (const s of io.sockets.sockets.values() as Iterable<GameSocket>) {
     if (s.data.code === room.code && s.data.playerId) {
       s.emit('state', room.viewFor(s.data.playerId));
     }
   }
+}
+
+function aiErrorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** ルームが破棄されておらず、ラウンドが差し替わっていないか */
+function isCurrentRound(room: Room, round: DoorsRound): boolean {
+  return rooms.get(room.code) === room && room.doors === round;
+}
+
+/**
+ * AI GMの仕事を1つ始める。答えが未定なら答えを決め、送信済みの提案があれば古い順に1件答える。
+ * 終わったら broadcast し、その中で次の仕事を探す。結果が届くまでにラウンドが中止・破棄されていたら捨てる
+ */
+function driveAiGm(room: Room): void {
+  const round = room.doors;
+  if (!round?.isAiGm || !round.isRunning || round.aiBusy) return;
+  if (round.phase === 'doors-setup') {
+    if (round.answer) return;
+    round.aiBusy = true;
+    generateSecretAnswer(room.topic, room.aiAnswers)
+      .then(({ answer, memo }) => {
+        if (!isCurrentRound(room, round) || round.phase !== 'doors-setup') return round.endAiAnswer();
+        room.setAiAnswer(round, answer, memo);
+      })
+      .catch((e: unknown) => {
+        console.error('AI doors answer failed:', aiErrorText(e));
+        room.failAiAnswer(round);
+      })
+      .finally(() => {
+        if (rooms.get(room.code) === room) broadcast(room);
+      });
+    return;
+  }
+  const p = round.nextForAi();
+  if (!p) return;
+  round.beginAi(p);
+  const { id, kind, text } = p;
+  const secret = { answer: round.answer, memo: round.memo };
+  const job =
+    kind === 'question'
+      ? answerQuestion(secret, aiHistory(round), text).then((reply) => {
+          if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiQuestion(id, reply);
+        })
+      : judge(secret, text).then(({ verdict, reason }) => {
+          if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiGuess(id, verdict, reason);
+        });
+  job
+    .catch((e: unknown) => {
+      console.error('AI doors reply failed:', aiErrorText(e));
+      if (isCurrentRound(room, round) && round.isAwaitingAi(id)) {
+        round.failAi(id, 'AIの応答に失敗しました。ホストは再試行できます');
+      }
+    })
+    .finally(() => {
+      // 結果を捨てた場合も、処理中の印を残して進行を止めない
+      round.releaseAi(id);
+      if (rooms.get(room.code) !== room) return;
+      room.phase = room.doors?.phase ?? room.phase;
+      broadcast(room);
+    });
+}
+
+/** AIへ渡す履歴。嘘で反転する前の正直な回答を渡し、AIが自分の回答と矛盾しないようにする */
+function aiHistory(round: DoorsRound): HistoryItem[] {
+  return round.proposals.flatMap((p) =>
+    p.kind === 'question' && p.status === 'answered' && p.honestReply ? [{ question: p.text, reply: p.honestReply }] : [],
+  );
+}
+
+/** 表記の正規化で答えと一致すれば、AIに聞かずに正解にする */
+async function judge(secret: SecretAnswer, guess: string): Promise<Judgement> {
+  const key = normalizeText(guess);
+  // 正規化で空になる (記号だけの) 解答・答えは完全一致にせず、AIの判定に回す
+  if (key !== '' && key === normalizeText(secret.answer)) {
+    return { verdict: 'correct', reason: '表記をそろえると答えと一致しました' };
+  }
+  return judgeGuess(secret, guess);
 }
 
 function errorMessage(e: unknown): string {
@@ -305,6 +389,10 @@ io.on('connection', (socket: GameSocket) => {
     withRoom(socket, (room, pid, p) =>
       room.doorsAction((d) => d.extend(pid === room.hostId || pid === d.gmId, p.delta)),
     ),
+  );
+  socket.on(
+    'doors:ai-retry',
+    withRoom(socket, (room, pid) => room.doorsAction((d) => d.retryAi(pid === room.hostId))),
   );
   socket.on(
     'doors:extend-request',
