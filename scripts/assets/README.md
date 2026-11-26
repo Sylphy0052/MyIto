@@ -1,6 +1,6 @@
 # AI GMの立ち絵・BGMの生成スクリプト
 
-Issue #51 用です。AI GMの立ち絵（7表情）とBGM（lobby / game / win / lose 各3曲）を、ComfyUIで作ります。立ち絵はAI GMのみで使います。
+Issue #51 用です。AI GMの立ち絵（7表情）とBGM（lobby / ito / doors / win / lose 各3曲。ゲーム中はitoと10の扉で曲を分ける）を、ComfyUIで作ります。立ち絵はAI GMのみで使います。
 
 ComfyUIはGPUサーバのdocker内で1台動かし、同じコンテナ内で生成ドライバ（`gen_portrait.py` / `gen_bgm.py`）を走らせます。透過・縮小・音声加工は手元の `finalize.py` で行います。ComfyUIは `scripts/assets/` からimportしません。HTTP APIだけを使います。
 
@@ -12,7 +12,7 @@ ComfyUIはGPUサーバのdocker内で1台動かし、同じコンテナ内で生
 | `gen_portrait.py` | コンテナ | `base`: 1024x1536の立ち絵を数候補、`expressions`: 選んだ1枚から顔だけinpaintして7表情 |
 | `gen_bgm.py` | コンテナ | ACE-Step v1 3.5Bで80秒のインスト曲を分類ごとに3曲 |
 | `finalize.py` | 手元 | 立ち絵をrembgで透過してWebPへ、BGMをループ化・音量調整してmp3へ |
-| `character.json` | - | キャラ設定（銀髪ショート、紺のベストと白シャツ、クールな案内役、女性） |
+| `character.json` | - | キャラ設定（銀髪ショート、紺のベストと白シャツ、ヘアクリップと赤いリボン、可愛い案内役の少女） |
 | `bgm_prompts.json` | - | 分類ごとのBGMのtags（各3曲）とnegative |
 
 ## 必要なモデルとノード
@@ -38,7 +38,7 @@ cs.py push myito-gm scripts/assets --exclude out
 cs.py run myito-gm --gpus 1 --hours 2 \
   --docker kfuruhashi-comfyui:cu130 \
   --docker-args="-v /ssdnas2/data/kfuruhashi/comfyui-models:/models -v /ssdnas2/data/kfuruhashi/docker/comfyui/extra_model_paths.yaml:/ComfyUI/extra_model_paths.yaml:ro -v /ssdnas2/data/kfuruhashi/ComfyUI:/ComfyUI" \
-  -- bash -c 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8188/system_stats',timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py base --out out/candidates --count 4'
+  -- 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen(\"http://127.0.0.1:8188/system_stats\",timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py base --out out/candidates --count 4'
 
 # 4. 候補を手元へ取り、1枚選ぶ
 cs.py fetch myito-gm assets/out/candidates ./out/candidates
@@ -52,7 +52,7 @@ cs.py push myito-gm out/candidates/base-<seed>.png --dest assets/out
 cs.py run myito-gm --gpus 1 --hours 4 \
   --docker kfuruhashi-comfyui:cu130 \
   --docker-args="<手順3と同じ>" \
-  -- bash -c 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8188/system_stats',timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py expressions --base out/base-<seed>.png --out out/expressions && python3 gen_bgm.py --out out/raw'
+  -- 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen(\"http://127.0.0.1:8188/system_stats\",timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py expressions --base out/base-<seed>.png --out out/expressions && python3 gen_bgm.py --out out/raw'
 
 # 6. 結果を手元へ取り、片付ける
 cs.py fetch myito-gm assets/out ./out
@@ -79,6 +79,7 @@ python3 scripts/assets/finalize.py --in out --only bgm
 ## 実機で分かったこと (g23、2026-11-26)
 
 - `cs.py run --docker` のコンテナ内では、cwdが作業dirと同じパスで見える。手順3・5の `<作業dirのコンテナ内パス>` は `$PWD` (`W=$PWD`) で足りる。
+- `cs.py run` は `--` の後ろの引数をクォートせずに空白でつないでシェルに渡す。`bash -c '...'` と書くと `bash -c` には最初の語しか渡らず、`$W` が空のまま `mkdir /io` などが走って失敗する (2026-11-26、g20)。手順3・5のようにコマンド全体を1つの文字列で渡し、中の引用符は `\"` にする。
 - `--gpus 1` を併用するとA100が1枚見える (`nvidia-smi -L` で確認)。コンテナのpythonは `python` と `python3` のどちらも `/usr/local/bin` にある。ffmpegとrembgは無いので、`finalize.py` は手元で動かす。
 - 非rootで動くので、HOMEが未設定だとComfyUIが `PermissionError: '/.triton'` で落ちる。`HOME` と `TRITON_CACHE_DIR` を作業dir配下へ向け、ComfyUIの `--output-directory` `--input-directory` `--temp-directory` `--user-directory` も作業dir配下にする。共有の `/ComfyUI` には書かない。
 - 起動は `python main.py --listen 127.0.0.1 --port 8188 ...` をバックグラウンドで起こし、`/system_stats` が返るまで待つ。5〜6回 (15〜18秒) ほどで立ち上がった。

@@ -6,7 +6,12 @@
       "instrumental, peaceful, soft acoustic guitar, airy synth pad, mellow, slow tempo",
       "instrumental, serene, gentle electric piano, soft strings, relaxed, warm"
     ],
-    "game": [
+    "ito": [
+      "instrumental, playful, light, cheerful, pizzicato strings, marimba, soft percussion, cozy, mid tempo, background music",
+      "instrumental, lighthearted, friendly, ukulele, soft claps, whimsical, relaxed groove, gentle, background music",
+      "instrumental, cute, bouncy, glockenspiel, soft piano, light bass, curious, warm, mid tempo, background music"
+    ],
+    "doors": [
       "instrumental, quiet mystery, suspenseful, minimal, low drone, sparse piano, subtle tension, slow tempo, dark ambient",
       "instrumental, understated suspense, pizzicato strings, soft pulse, mysterious, restrained, steady tension",
       "instrumental, quiet investigation, muted bass, light percussion, eerie pads, tense but calm"

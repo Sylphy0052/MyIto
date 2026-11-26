@@ -22,7 +22,7 @@ SECONDS = 80.0
 STEPS = 50
 CFG = 5.0
 LYRICS = "[instrumental]"
-CATEGORIES = ("lobby", "game", "win", "lose")
+CATEGORIES = ("lobby", "ito", "doors", "win", "lose")
 
 
 def workflow(tags: str, negative: str, seed: int) -> dict[str, Any]:

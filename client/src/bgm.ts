@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { RoomView } from '../../shared/types';
 import { isDoorsPhase } from '../../shared/types';
 
-export type BgmCategory = 'lobby' | 'game' | 'win' | 'lose';
+export type BgmCategory = 'lobby' | 'ito' | 'doors' | 'win' | 'lose';
 export type BgmVolume = 'off' | 'low' | 'mid' | 'high';
 
 export const BGM_VOLUMES: readonly BgmVolume[] = ['off', 'low', 'mid', 'high'];
@@ -27,7 +27,8 @@ export function bgmCategoryFor(view: RoomView | null): BgmCategory {
     const outcome = view.doors?.outcome;
     return outcome === 'win' ? 'win' : outcome === 'lose' ? 'lose' : 'lobby';
   }
-  return view.phase === 'playing' || view.phase === 'revealing' || isDoorsPhase(view.phase) ? 'game' : 'lobby';
+  if (isDoorsPhase(view.phase)) return 'doors';
+  return view.phase === 'playing' || view.phase === 'revealing' ? 'ito' : 'lobby';
 }
 
 // ブラウザは操作前の自動再生を止めるので、最初の操作があるまでは鳴らさない (sound.tsと同じ扱い)

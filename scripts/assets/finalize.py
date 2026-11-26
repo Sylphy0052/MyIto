@@ -35,7 +35,7 @@ PORTRAIT_WIDTH = 512
 PORTRAIT_TOTAL_BYTES = 1_000_000
 QUALITY_STEPS = (90, 85, 80, 75, 70, 65, 60, 50, 40)
 
-CATEGORIES = ("lobby", "game", "win", "lose")
+CATEGORIES = ("lobby", "ito", "doors", "win", "lose")
 RATE = 44100
 CHANNELS = 2
 CROSSFADE_SECONDS = 4.0
