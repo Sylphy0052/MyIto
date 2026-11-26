@@ -4,6 +4,7 @@ import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/r
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
 import { RoomScreen } from './RoomScreen';
+import { BGM_VOLUMES, BGM_VOLUME_LABEL, bgmCategoryFor, useBgm, useBgmVolume, type BgmVolume } from './bgm';
 
 // 背景にゆっくり漂うカードの影。位置・大きさ・周期は固定値で、描画ごとに変わらないようにする
 const BACKDROP_CARDS = [
@@ -51,6 +52,8 @@ export function App() {
   const [errorSeq, setErrorSeq] = useState(0);
   const [connected, setConnected] = useState(socket.connected);
   const errorTimer = useRef<number | undefined>(undefined);
+  const [bgmVolume, setBgmVolume] = useBgmVolume();
+  useBgm(bgmCategoryFor(view), bgmVolume);
 
   const showError = useCallback((msg: string) => {
     setError(msg);
@@ -119,6 +122,16 @@ export function App() {
   return (
     <div className="app">
       <Backdrop />
+      <label className="bgm-volume">
+        BGM
+        <select value={bgmVolume} onChange={(e) => setBgmVolume(e.target.value as BgmVolume)}>
+          {BGM_VOLUMES.map((v) => (
+            <option key={v} value={v}>
+              {BGM_VOLUME_LABEL[v]}
+            </option>
+          ))}
+        </select>
+      </label>
       <AnimatePresence>
         {!connected && (
           <m.div
