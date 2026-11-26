@@ -1470,3 +1470,50 @@ button.ai-busy {
     min-width: 0;
   }
 }
+
+/* AI GMの立ち絵。右下に重ね、操作は通す */
+.gm-portrait {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: min(26vw, 280px);
+  aspect-ratio: 2 / 3;
+  pointer-events: none;
+  z-index: 1;
+}
+.gm-portrait img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom;
+}
+@media (max-width: 720px) {
+  /* 狭い画面はバストアップで小さく出す */
+  .gm-portrait {
+    width: 96px;
+    aspect-ratio: 1;
+    opacity: 0.9;
+  }
+  .gm-portrait img {
+    object-fit: cover;
+    object-position: top;
+  }
+}
+
+/* BGMの音量。全画面共通で左下に置く */
+.bgm-volume {
+  position: fixed;
+  left: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.bgm-volume select {
+  min-height: auto;
+}

@@ -6,6 +6,7 @@ import type { Act } from './RoomScreen';
 import { DoorRow, LogRow, ReplyBadge, STATUS_LABEL, WaitingDoors, kindLabel } from './DoorsParts';
 import { CorrectPanel, GmQueue, SecretAnswer } from './DoorsGm';
 import { DoorsResult } from './DoorsResult';
+import { GmPortrait } from './GmPortrait';
 import { TimeLeft, TimeUpNotice, TurnLeft, TurnTimeoutNotice } from './DoorsTime';
 import { playChime, useSoundSetting } from './sound';
 
@@ -44,6 +45,7 @@ export function Doors({ view, isHost, act }: Props) {
 
   return (
     <div className="doors">
+      <GmPortrait doors={doors} />
       <div className="doors-status">
         <span>
           GM: <strong>{gmName}</strong>

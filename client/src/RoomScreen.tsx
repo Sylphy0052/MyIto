@@ -5,6 +5,7 @@ import { Lobby } from './Lobby';
 import { Board, DEAL_INTERVAL_S } from './Board';
 import { copyText } from './copyText';
 import { Doors } from './Doors';
+import { isPerfectOrder } from './bgm';
 
 const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
@@ -31,10 +32,8 @@ export function RoomScreen({ view, act, onLeave }: Props) {
   );
   const onHint = useCallback((cardId: string, hint: string) => act('hint', { cardId, hint }), [act]);
   const isPerfect = useMemo(() => {
-    if (view.phase !== 'result') return false;
-    const values = new Map(view.cards.map((c) => [c.id, c.value ?? 0]));
-    return view.order.every((id, i) => i === 0 || values.get(id)! > values.get(view.order[i - 1]!)!);
-  }, [view.phase, view.cards, view.order]);
+    return view.phase === 'result' && isPerfectOrder(view);
+  }, [view]);
   // 配りと紙吹雪は、その場で段階が進んだときだけ演出する。リロード・再接続・途中参加では出さない
   const [flow, setFlow] = useState({ phase: view.phase, isDealing: false, isJustFinished: false });
   if (flow.phase !== view.phase) {

@@ -1,0 +1,71 @@
+{
+  "name": "AI GM",
+  "note": "AI GM専用の立ち絵。銀髪ショート、紺のベストと白シャツ、親しみやすく可愛い案内役の少女。",
+  "quality_tags": [
+    "masterpiece",
+    "best quality",
+    "anime style",
+    "detailed illustration",
+    "newest"
+  ],
+  "subject_tags": [
+    "1girl",
+    "solo"
+  ],
+  "artist_tags": [
+    "(@kantoku:0.75)"
+  ],
+  "appearance_tags": [
+    "silver hair",
+    "short hair",
+    "hair ornament",
+    "hairclip",
+    "navy vest",
+    "white shirt",
+    "collared shirt",
+    "red ribbon tie",
+    "big eyes",
+    "cute",
+    "round face",
+    "soft expression",
+    "gentle smile",
+    "blush",
+    "looking at viewer",
+    "standing",
+    "young girl"
+  ],
+  "text": "A cute, friendly young female guide with short silver hair and a small hairclip, wearing a navy vest over a white shirt with a red ribbon.",
+  "portrait_text": "Upper body, front view, looking at the viewer, at eye level, on a plain white background.",
+  "negative_tags": [
+    "worst quality",
+    "low quality",
+    "score_1",
+    "score_2",
+    "score_3",
+    "artist name",
+    "blurry",
+    "jpeg artifacts",
+    "chromatic aberration",
+    "watermark",
+    "signature",
+    "logo",
+    "text",
+    "bad anatomy",
+    "bad hands",
+    "multiple people",
+    "crowd",
+    "puddle",
+    "splashing",
+    "dark shadows",
+    "heavy shadows",
+    "dramatic lighting",
+    "(cast shadow:1.4)",
+    "(shadow on floor:1.4)",
+    "adult",
+    "mature",
+    "tall",
+    "side view",
+    "profile",
+    "from side"
+  ]
+}
