@@ -23,7 +23,16 @@ ComfyUIはGPUサーバのdocker内で1台動かし、同じコンテナ内で生
 
 ## 計算機サーバでの流し方
 
-ComfyUIのコンテナは `kfuruhashi-comfyui:cu130`、モデルは `/ssdnas2/data/kfuruhashi/comfyui-models`（コンテナ内 `/models`）、ComfyUI本体は `/ssdnas2/data/kfuruhashi/ComfyUI`（コンテナ内 `/ComfyUI`）にあります。`extra_model_paths.yaml` は `/ssdnas2/data/kfuruhashi/docker/comfyui/extra_model_paths.yaml` を `/ComfyUI/extra_model_paths.yaml` へ読み取り専用でmountします。
+以下のコマンドは、環境ごとの値を次の変数で書いています。実行前に自分の環境の値を入れてください。
+
+| 変数 | 中身 |
+| --- | --- |
+| `COMFY_IMAGE` | ComfyUIを含むdockerイメージ（CUDA 13系） |
+| `MODELS_DIR` | モデル置き場。コンテナ内 `/models` へmountする |
+| `COMFYUI_DIR` | ComfyUI本体。コンテナ内 `/ComfyUI` へmountする |
+| `EXTRA_MODEL_PATHS` | `extra_model_paths.yaml`。`/ComfyUI/extra_model_paths.yaml` へ読み取り専用でmountする |
+
+GPUサーバ上のパスは、作業dirと同じくサーバから見えるNAS上に置きます。
 
 `cs.py` は `compute-server` skillのスクリプトです（`~/.claude/skills/compute-server/scripts/cs.py`）。以下ではこれを `cs.py` と書きます。
 
@@ -36,8 +45,8 @@ cs.py push myito-gm scripts/assets --exclude out
 
 # 3. 立ち絵の候補を作る（ComfyUIを起動してからドライバを流す）
 cs.py run myito-gm --gpus 1 --hours 2 \
-  --docker kfuruhashi-comfyui:cu130 \
-  --docker-args="-v /ssdnas2/data/kfuruhashi/comfyui-models:/models -v /ssdnas2/data/kfuruhashi/docker/comfyui/extra_model_paths.yaml:/ComfyUI/extra_model_paths.yaml:ro -v /ssdnas2/data/kfuruhashi/ComfyUI:/ComfyUI" \
+  --docker $COMFY_IMAGE \
+  --docker-args="-v $MODELS_DIR:/models -v $EXTRA_MODEL_PATHS:/ComfyUI/extra_model_paths.yaml:ro -v $COMFYUI_DIR:/ComfyUI" \
   -- 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen(\"http://127.0.0.1:8188/system_stats\",timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py base --out out/candidates --count 4'
 
 # 4. 候補を手元へ取り、1枚選ぶ
@@ -50,7 +59,7 @@ cs.py fetch myito-gm assets/out/candidates ./out/candidates
 # 5. 選んだ1枚を送り、7表情とBGMを作る
 cs.py push myito-gm out/candidates/base-<seed>.png --dest assets/out
 cs.py run myito-gm --gpus 1 --hours 4 \
-  --docker kfuruhashi-comfyui:cu130 \
+  --docker $COMFY_IMAGE \
   --docker-args="<手順3と同じ>" \
   -- 'W=$PWD; export HOME=$W/home TRITON_CACHE_DIR=$W/home/triton; mkdir -p $HOME $TRITON_CACHE_DIR $W/io/output $W/io/input $W/io/user; (cd /ComfyUI && python main.py --listen 127.0.0.1 --port 8188 --output-directory $W/io/output --input-directory $W/io/input --temp-directory $W/io --user-directory $W/io/user > $W/comfy.log 2>&1 &); for i in $(seq 1 120); do python3 -c "import urllib.request;urllib.request.urlopen(\"http://127.0.0.1:8188/system_stats\",timeout=2)" 2>/dev/null && break; sleep 3; done; cd $W/assets && python3 gen_portrait.py expressions --base out/base-<seed>.png --out out/expressions && python3 gen_bgm.py --out out/raw'
 
@@ -76,10 +85,10 @@ python3 scripts/assets/finalize.py --in out --only bgm
 - BGMは前後の無音を除去し、終わり4秒を頭へ重ねてループにし、-20 LUFS・TP -2で128kのmp3にします。
 - 出力先は `--public` で変えられます（既定 `client/public`）。
 
-## 実機で分かったこと (g23、2026-11-26)
+## 実機で分かったこと (2026-11-26)
 
 - `cs.py run --docker` のコンテナ内では、cwdが作業dirと同じパスで見える。手順3・5の `<作業dirのコンテナ内パス>` は `$PWD` (`W=$PWD`) で足りる。
-- `cs.py run` は `--` の後ろの引数をクォートせずに空白でつないでシェルに渡す。`bash -c '...'` と書くと `bash -c` には最初の語しか渡らず、`$W` が空のまま `mkdir /io` などが走って失敗する (2026-11-26、g20)。手順3・5のようにコマンド全体を1つの文字列で渡し、中の引用符は `\"` にする。
+- `cs.py run` は `--` の後ろの引数をクォートせずに空白でつないでシェルに渡す。`bash -c '...'` と書くと `bash -c` には最初の語しか渡らず、`$W` が空のまま `mkdir /io` などが走って失敗する。手順3・5のようにコマンド全体を1つの文字列で渡し、中の引用符は `\"` にする。
 - `--gpus 1` を併用するとA100が1枚見える (`nvidia-smi -L` で確認)。コンテナのpythonは `python` と `python3` のどちらも `/usr/local/bin` にある。ffmpegとrembgは無いので、`finalize.py` は手元で動かす。
 - 非rootで動くので、HOMEが未設定だとComfyUIが `PermissionError: '/.triton'` で落ちる。`HOME` と `TRITON_CACHE_DIR` を作業dir配下へ向け、ComfyUIの `--output-directory` `--input-directory` `--temp-directory` `--user-directory` も作業dir配下にする。共有の `/ComfyUI` には書かない。
 - 起動は `python main.py --listen 127.0.0.1 --port 8188 ...` をバックグラウンドで起こし、`/system_stats` が返るまで待つ。5〜6回 (15〜18秒) ほどで立ち上がった。

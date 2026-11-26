@@ -14,6 +14,10 @@ export function GmPortrait({ doors }: { doors: DoorsView }) {
           src={`/gm/${expression}.webp`}
           alt=""
           draggable={false}
+          onError={(e) => {
+            // 素材が欠けていても壊れた画像のアイコンは出さない
+            e.currentTarget.style.visibility = 'hidden';
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

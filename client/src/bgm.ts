@@ -31,16 +31,22 @@ export function bgmCategoryFor(view: RoomView | null): BgmCategory {
   return view.phase === 'playing' || view.phase === 'revealing' ? 'ito' : 'lobby';
 }
 
-// ブラウザは操作前の自動再生を止めるので、最初の操作があるまでは鳴らさない (sound.tsと同じ扱い)
+// ブラウザは操作前の自動再生を止めるので、最初の操作があるまでは鳴らさない (sound.tsと同じ扱い)。
+// どのイベントを再生の許可とみなすかはブラウザで違う (タッチはpointerdownでは足りない) ため、複数を拾う。
+// 許可の前に呼んだplay()は拒否されるので、以降の操作のたびに、鳴るはずの曲が止まっていれば再生し直す
 let hasInteracted = false;
 const interactListeners = new Set<() => void>();
 const markInteracted = () => {
-  if (hasInteracted) return;
+  if (hasInteracted) {
+    resumeIfBlocked();
+    return;
+  }
   hasInteracted = true;
   interactListeners.forEach((fn) => fn());
 };
-window.addEventListener('pointerdown', markInteracted, { capture: true });
-window.addEventListener('keydown', markInteracted, { capture: true });
+for (const type of ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown']) {
+  window.addEventListener(type, markInteracted, { capture: true });
+}
 
 function loadVolume(): BgmVolume {
   try {
@@ -89,7 +95,15 @@ function fadeTo(p: Player, target: number, onDone?: () => void): void {
 const state: {
   current: { category: BgmCategory; track: number; player: Player } | null;
   lastTrack: Partial<Record<BgmCategory, number>>;
-} = { current: null, lastTrack: {} };
+  gain: number;
+} = { current: null, lastTrack: {}, gain: 0 };
+
+/** 鳴るはずの曲が (再生の許可前に拒否されて) 止まっていれば、もう一度再生する */
+function resumeIfBlocked(): void {
+  const current = state.current;
+  if (!current || state.gain === 0 || !current.player.audio.paused) return;
+  current.player.audio.play().catch(() => {});
+}
 
 /** 分類ごとに3曲からランダムに選び、ループ再生する。分類が変わると1.5秒でフェードして切り替える */
 export function useBgm(category: BgmCategory, volume: BgmVolume): void {
@@ -104,6 +118,7 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
   useEffect(() => {
     if (!isReady) return;
     const gain = BGM_GAIN[volume];
+    state.gain = gain;
     const current = state.current;
     if (current && current.category === category) {
       // 分類は同じで音量だけ変わった。なしのときは止め、戻したときは続きから鳴らす
