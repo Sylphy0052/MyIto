@@ -1,0 +1,25 @@
+{
+  "negative": "vocals, singing, voice, humming, choir, lyrics, noise, distorted, low quality",
+  "categories": {
+    "lobby": [
+      "instrumental, calm, gentle, warm ambient, soft piano, light pads, relaxing, slow tempo",
+      "instrumental, peaceful, soft acoustic guitar, airy synth pad, mellow, slow tempo",
+      "instrumental, serene, gentle electric piano, soft strings, relaxed, warm"
+    ],
+    "game": [
+      "instrumental, quiet mystery, suspenseful, minimal, low drone, sparse piano, subtle tension, slow tempo, dark ambient",
+      "instrumental, understated suspense, pizzicato strings, soft pulse, mysterious, restrained, steady tension",
+      "instrumental, quiet investigation, muted bass, light percussion, eerie pads, tense but calm"
+    ],
+    "win": [
+      "instrumental, bright, triumphant, uplifting, sense of achievement, major key, cheerful piano, strings, mid tempo",
+      "instrumental, joyful, celebratory, sparkling bells, warm brass, upbeat, accomplished",
+      "instrumental, happy, victorious, light orchestral, glockenspiel, energetic, hopeful"
+    ],
+    "lose": [
+      "instrumental, bittersweet, sad, quiet, solo piano, soft strings, melancholic, slow tempo",
+      "instrumental, wistful, gentle, lonely, soft guitar, faint pads, slow, sorrowful",
+      "instrumental, tender sadness, quiet, cello, sparse piano, reflective, slow"
+    ]
+  }
+}
