@@ -101,7 +101,8 @@ const state: {
 /** 鳴るはずの曲が (再生の許可前に拒否されて) 止まっていれば、もう一度再生する */
 function resumeIfBlocked(): void {
   const current = state.current;
-  if (!current || state.gain === 0 || !current.player.audio.paused) return;
+  // 読み込みに失敗した曲 (404など) は、操作のたびに取りに行かない
+  if (!current || state.gain === 0 || !current.player.audio.paused || current.player.audio.error) return;
   current.player.audio.play().catch(() => {});
 }
 
