@@ -87,6 +87,21 @@ await page.waitForTimeout(1500);
 await shot('06-after-retry');
 rec('再試行後の表示に「AIの応答に失敗」が残らない', !(await body()).includes('(ホストが再試行できます)') && (await page.locator('.ai-error').count()) === 0);
 
+// 3b. 立ち絵: 1280x800で、回答の種類ごとの表情と漫符を撮る (モックはキーワードで unknown / maybe-yes / maybe-no を返す)
+await page.setViewportSize({ width: 1280, height: 800 });
+for (const [file, text, badge] of [
+  ['06a-portrait-unknown', `わからない ${TAG} 質問ですか?`, /わからない|不明|\?/],
+  ['06b-portrait-maybe-yes', `たぶん鳥 ${TAG} ですか?`, /△|どちらかといえばYes/],
+  ['06c-portrait-maybe-no', `たぶん違う ${TAG} ですか?`, /△|どちらかといえばNo/],
+]) {
+  await propose('question', text);
+  rec(`立ち絵確認: ${file} の質問に回答が付く`, await page.locator('.reply-badge', { hasText: badge }).first().waitFor({ timeout: 15000 }).then(() => true, () => false));
+  await page.waitForTimeout(400); // 動きと漫符が出ている間に撮る
+  await page.screenshot({ path: `${out}/${file}.png` });
+  await page.waitForTimeout(1500);
+}
+await page.setViewportSize({ width: 390, height: 844 });
+
 // 4. 解答: 不正解 / おしい / 正解
 await propose('guess', 'フラミンゴ');
 rec('解答が不正解になる', await waitText('不正解'));

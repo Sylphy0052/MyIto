@@ -41,7 +41,17 @@ http
             res.writeHead(500, { 'Content-Type': 'text/plain' });
             return res.end('mock failure');
           }
-          return reply(res, { meaning: q, rating: q.includes('鳥') ? 'yes' : 'no' });
+          // 立ち絵の確認用に、キーワードで回答の種類を変える
+          const rating = q.includes('わからない')
+            ? 'unknown'
+            : q.includes('たぶん鳥')
+              ? 'maybe-yes'
+              : q.includes('たぶん違う')
+                ? 'maybe-no'
+                : q.includes('鳥')
+                  ? 'yes'
+                  : 'no';
+          return reply(res, { meaning: q, rating });
         }
         if (template.includes('"verdict"')) {
           const g = String(input.guess ?? '');
