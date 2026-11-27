@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AnimatePresence, m, type Variants } from 'motion/react';
 import { LIMITS, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
+import { SuggestForm, TopicSuggestions } from './TopicSuggestions';
 import { DoorsSettingsForm, DoorsSummary, MODE_LABEL, ModeToggle, doorsStartBlocker, minPlayers } from './DoorsLobby';
 
 interface Props {
@@ -107,6 +108,9 @@ function CandidateList({ view, onPick }: { view: RoomView; onPick?: (index: numb
 export function Lobby({ view, isHost, act }: Props) {
   const [customTopic, setCustomTopic] = useState('');
   const [genre, setGenre] = useState('');
+  const [genreCut, setGenreCut] = useState(false);
+  const topicInput = useRef<HTMLInputElement>(null);
+  const genreInput = useRef<HTMLInputElement>(null);
   const seated = view.players.filter((p) => p.connected).length;
   const isDoors = view.mode === 'doors';
   const topicLabel = isDoors ? 'テーマ' : 'お題';
@@ -148,6 +152,10 @@ export function Lobby({ view, isHost, act }: Props) {
             <CandidateList view={view} />
           </m.div>
         )}
+        <m.div variants={rowVariants}>
+          <SuggestForm view={view} act={act} />
+          <TopicSuggestions view={view} isHost={false} act={act} />
+        </m.div>
         <m.p className="muted" variants={rowVariants}>
           ホストが開始するのを待っています
           <span className="dots" aria-hidden="true">
@@ -201,6 +209,7 @@ export function Lobby({ view, isHost, act }: Props) {
       </m.div>
       <m.div className="field-row" variants={rowVariants}>
         <input
+          ref={topicInput}
           placeholder={`${topicLabel}を自由入力`}
           value={customTopic}
           maxLength={LIMITS.topic}
@@ -212,10 +221,14 @@ export function Lobby({ view, isHost, act }: Props) {
       </m.div>
       <m.div className="field-row" variants={rowVariants}>
         <input
+          ref={genreInput}
           placeholder={`AI: ジャンル (${LIMITS.genre}文字まで、空でも可)`}
           value={genre}
           maxLength={LIMITS.genre}
-          onChange={(e) => setGenre(e.target.value)}
+          onChange={(e) => {
+            setGenre(e.target.value);
+            setGenreCut(false);
+          }}
         />
         <button
           className={view.aiBusy ? 'ai-busy' : undefined}
@@ -225,7 +238,22 @@ export function Lobby({ view, isHost, act }: Props) {
           {view.aiBusy ? '生成中...' : `AIで${LIMITS.aiCandidates}案生成`}
         </button>
       </m.div>
+      {genreCut && <p className="muted">ジャンルは{LIMITS.genre}字までなので、先頭{LIMITS.genre}字だけ入れました</p>}
       <CandidateList view={view} onPick={(i) => act('topic:pick', { index: i })} />
+      <TopicSuggestions
+        view={view}
+        isHost
+        act={act}
+        onUse={(text) => {
+          setCustomTopic(text);
+          topicInput.current?.focus();
+        }}
+        onAsk={(text) => {
+          setGenre(text.slice(0, LIMITS.genre));
+          setGenreCut(text.length > LIMITS.genre);
+          genreInput.current?.focus();
+        }}
+      />
 
       <m.div variants={rowVariants}>
         <m.button

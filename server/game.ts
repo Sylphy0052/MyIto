@@ -12,6 +12,7 @@ import {
   type Phase,
   type RoomView,
   type TopicSource,
+  type TopicSuggestionView,
 } from '../shared/types';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { AI_GM_ID, DOORS_MINUTE_MS, DOORS_TURN_UNIT_MS, DoorsRound, type Seat } from './doors';
@@ -25,6 +26,9 @@ export { GameError };
 
 const MAX_VALUE = 100;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+/** お題の案を同じ人が続けて送れる最短の間隔 */
+export const SUGGEST_INTERVAL_MS = 5_000;
 
 const HOST_GRACE_MS = 30_000;
 export const GM_GRACE_MS = 30_000;
@@ -84,6 +88,10 @@ export class Room {
   topic = randomTopic();
   topicSource: TopicSource = 'random';
   topicCandidates: string[] = [];
+  /** ホスト以外が送ったお題の案 */
+  topicSuggestions: (TopicSuggestionView)[] = [];
+  /** 案を最後に送った時刻 (playerId ごと) */
+  private lastSuggestAt = new Map<string, number>();
   aiBusy = false;
   notice = '';
   round = 0;
@@ -143,7 +151,10 @@ export class Room {
   private pruneAway(): void {
     const removed = this.players.filter((p) => !p.connected && p.id !== this.hostId && !this.holdsSeat(p.id));
     this.players = this.players.filter((p) => !removed.includes(p));
-    for (const p of removed) this.doors?.dropAuthor(p.id);
+    for (const p of removed) {
+      this.doors?.dropAuthor(p.id);
+      this.dropSuggestions(p.id);
+    }
   }
 
   setConnected(playerId: string, connected: boolean): void {
@@ -184,6 +195,7 @@ export class Room {
     const next = this.players.find((p) => p.connected);
     if (!next) return false;
     this.hostId = next.id;
+    this.dropSuggestions(next.id);
     this.notice = `${next.name} さんがホストになりました`;
     return true;
   }
@@ -194,11 +206,13 @@ export class Room {
     else {
       this.players = this.players.filter((p) => p.id !== playerId);
       this.doors?.dropAuthor(playerId);
+      this.dropSuggestions(playerId);
     }
     if (playerId === this.hostId) {
       const next = this.players.find((p) => p.connected && p.id !== playerId);
       if (next) {
         this.hostId = next.id;
+        this.dropSuggestions(next.id);
         this.notice = `${next.name} さんがホストになりました`;
       } else {
         this.hostId = '';
@@ -232,8 +246,50 @@ export class Room {
     if (!topic) throw new GameError('お題を入力してください');
     this.topic = topic;
     this.topicSource = source;
+    // お題になった案は一覧から消す
+    this.topicSuggestions = this.topicSuggestions.filter((x) => x.text !== topic);
     // 候補から選んだとき以外は、古い候補を残さない
     if (source !== 'ai') this.topicCandidates = [];
+  }
+
+  // ---- お題の案 (ホスト以外が送り、ホストが入力欄へコピーして使う) ----
+
+  private dropSuggestions(playerId: string): void {
+    this.topicSuggestions = this.topicSuggestions.filter((x) => x.authorId !== playerId);
+    this.lastSuggestAt.delete(playerId);
+  }
+
+  /** text は呼び出し側で cleanText を通す */
+  suggestTopic(playerId: string, text: string, now = Date.now()): void {
+    if (this.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
+    if (playerId === this.hostId) throw new GameError('ホストはお題を直接決められます');
+    if (!text) throw new GameError('お題を入力してください');
+    if (this.topicSuggestions.filter((x) => x.authorId === playerId).length >= LIMITS.topicSuggestionsPerPlayer) {
+      throw new GameError(`案は1人${LIMITS.topicSuggestionsPerPlayer}件までです。取り下げてから送ってください`);
+    }
+    const last = this.lastSuggestAt.get(playerId);
+    if (last !== undefined && now - last < SUGGEST_INTERVAL_MS) {
+      throw new GameError(`案は${SUGGEST_INTERVAL_MS / 1000}秒に1件まで送れます`);
+    }
+    if (text === this.topic || this.topicSuggestions.some((x) => x.text === text)) {
+      throw new GameError('同じ案がすでにあります');
+    }
+    this.topicSuggestions.push({ id: randomUUID(), authorId: playerId, text });
+    this.lastSuggestAt.set(playerId, now);
+  }
+
+  /** 送った本人の取り下げ */
+  withdrawSuggestion(playerId: string, id: unknown): void {
+    const target = this.topicSuggestions.find((x) => x.id === id && x.authorId === playerId);
+    if (!target) throw new GameError('案が見つかりません');
+    this.topicSuggestions = this.topicSuggestions.filter((x) => x !== target);
+  }
+
+  dismissSuggestion(playerId: string, id: unknown): void {
+    this.requireHost(playerId);
+    const target = this.topicSuggestions.find((x) => x.id === id);
+    if (!target) throw new GameError('案が見つかりません');
+    this.topicSuggestions = this.topicSuggestions.filter((x) => x !== target);
   }
 
   /** 内蔵リストからお題 (10の扉ではテーマ) を出し直す */
@@ -251,6 +307,7 @@ export class Room {
     if (mode === this.mode) return;
     this.mode = mode;
     this.topicCandidates = [];
+    this.topicSuggestions = [];
     this.topic = mode === 'doors' ? randomDoorsTheme() : randomTopic();
     this.topicSource = 'random';
     this.notice = '';
@@ -400,6 +457,8 @@ export class Room {
     const minPlayers = this.mode === 'doors' && this.doorsSettings.gmPick === 'ai' ? 1 : 2;
     if (seated.length < minPlayers) throw new GameError('2人以上で始めてください');
     if (seated.length > LIMITS.maxPlayers) throw new GameError(`${LIMITS.maxPlayers}人以下で始めてください`);
+    this.topicSuggestions = [];
+    this.lastSuggestAt.clear();
     if (this.mode === 'doors') return this.startDoors(seated);
     const total = seated.length * this.cardsPerPlayer;
     if (total > MAX_VALUE) throw new GameError('枚数が多すぎます');
@@ -554,6 +613,7 @@ export class Room {
       topic: this.topic,
       topicSource: this.topicSource,
       topicCandidates: this.topicCandidates,
+      topicSuggestions: this.topicSuggestions.map((x) => ({ id: x.id, authorId: x.authorId, text: x.text })),
       aiBusy: this.aiBusy,
       aiAvailable: isAskConfigured(),
       nextGmId: this.nextGmId,

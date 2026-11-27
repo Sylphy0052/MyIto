@@ -294,6 +294,32 @@ textarea::placeholder {
   font-size: var(--fs-xl);
   font-weight: 700;
   flex: 1;
+  overflow-wrap: anywhere;
+}
+.topic-suggestions ul {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+.topic-suggestions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.topic-suggestions .suggestion-text {
+  flex: 1 1 12em;
+  overflow-wrap: anywhere;
+}
+.topic-suggestions .suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.suggest-form {
+  margin-bottom: var(--sp-3);
 }
 
 .my-numbers {

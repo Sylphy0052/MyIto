@@ -7,8 +7,10 @@ export type GameMode = 'ito' | 'doors';
 export const LIMITS = {
   name: 16,
   hint: 40,
-  topic: 60,
+  topic: 100,
   genre: 20,
+  /** ホスト以外が1人で同時に出せるお題の案の数 */
+  topicSuggestionsPerPlayer: 3,
   aiCandidates: 10,
   maxPlayers: 14,
   maxCardsPerPlayer: 5,
@@ -176,6 +178,12 @@ export interface CardView {
   state: CardState;
 }
 
+export interface TopicSuggestionView {
+  id: string;
+  authorId: string;
+  text: string;
+}
+
 export interface RoomView {
   code: string;
   you: string;
@@ -190,6 +198,8 @@ export interface RoomView {
   topicSource: TopicSource;
   /** 直近のAI生成で出たお題の候補。ホストがここから選ぶ */
   topicCandidates: string[];
+  /** ホスト以外の参加者が送ったお題・テーマの案 (ロビーだけ) */
+  topicSuggestions: TopicSuggestionView[];
   aiBusy: boolean;
   /** ASK API の設定があり、AIを使えるか。無ければ10の扉のAI GMを選べない */
   aiAvailable: boolean;
