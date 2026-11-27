@@ -1,4 +1,4 @@
-import { AnimatePresence, m, type Variants } from 'motion/react';
+import { AnimatePresence, m, type Transition, type Variant, type Variants } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DoorsView } from '../../shared/types';
 import { expressionForCue, gmCueFor, gmImageFor, type GmCue } from './gmExpression';
@@ -9,22 +9,23 @@ const MARK_MS = 1300;
 const KEYFRAME_TRANSITION = { duration: 0.6, ease: 'easeInOut' } as const;
 const SINK_TRANSITION = { duration: 1, ease: 'easeInOut' } as const;
 
-const HOP = { y: [0, -10, 0, -5, 0], transition: KEYFRAME_TRANSITION }; // yes: 小さく弾む
-const JUMP = { y: [0, -18, 0, -8, 0], transition: KEYFRAME_TRANSITION }; // close・correct: 跳ねる
-const TILT = { rotate: [0, 6, 4, 6, 0], transition: KEYFRAME_TRANSITION }; // unknown・maybe-no: 首をかしげる
-const PUFF = { scaleY: [1, 1.06, 1], transition: KEYFRAME_TRANSITION }; // wrong・lose: 胸を張る
-const SINK = { y: [0, 12, 12, 0], transition: SINK_TRANSITION }; // win・error: 沈む
+// 動きの途中で合図が変わっても、前の動きの値が残らないよう、全合図で動かさない値は静止位置へ戻す
+const REST = { x: 0, y: 0, rotate: 0, scale: 1, scaleY: 1 };
+const move = (keyframes: Variant, transition: Transition = KEYFRAME_TRANSITION): Variant => ({ ...REST, ...keyframes, transition });
 
-// 動きの途中で合図が変わっても、止まった位置に残らず静止位置へ戻す
-const REST = { x: 0, y: 0, rotate: 0, scale: 1, scaleY: 1, transition: KEYFRAME_TRANSITION };
+const HOP = move({ y: [0, -10, 0, -5, 0] }); // yes: 小さく弾む
+const JUMP = move({ y: [0, -18, 0, -8, 0] }); // close・correct: 跳ねる
+const TILT = move({ rotate: [0, 6, 4, 6, 0] }); // unknown・maybe-no: 首をかしげる
+const PUFF = move({ scaleY: [1, 1.06, 1] }); // wrong・lose: 胸を張る
+const SINK = move({ y: [0, 12, 12, 0] }, SINK_TRANSITION); // win・error: 沈む
 
 /** 合図が変わった瞬間のワンショットの動き。reduced-motionでは client/src/main.tsx の MotionConfig がtransformを止める */
 const CUE_MOTION: Variants = {
-  idle: REST,
-  thinking: REST,
+  idle: move({}),
+  thinking: move({}),
   yes: HOP,
-  no: { rotate: [0, -6, 6, -5, 5, 0], transition: KEYFRAME_TRANSITION },
-  'maybe-yes': { scale: [1, 0.94, 1], transition: KEYFRAME_TRANSITION },
+  no: move({ rotate: [0, -6, 6, -5, 5, 0] }),
+  'maybe-yes': move({ scale: [1, 0.94, 1] }),
   unknown: TILT,
   'maybe-no': TILT,
   close: JUMP,
@@ -33,7 +34,7 @@ const CUE_MOTION: Variants = {
   lose: PUFF,
   win: SINK,
   error: SINK,
-  aborted: { x: [0, -8, 8, -8, 8, 0], transition: KEYFRAME_TRANSITION },
+  aborted: move({ x: [0, -8, 8, -8, 8, 0] }),
 };
 
 const TEAR = (
