@@ -54,8 +54,9 @@ await b.getByText('ホストが開始するのを待っています').waitFor();
 
 // ロビー: 10の扉を選び、GMを指名する
 await host.getByRole('radio', { name: '10の扉' }).click();
-await host.getByLabel('GMの決め方').or(host.locator('select').first()).first().selectOption('named');
-await host.locator('select').nth(1).selectOption({ label: 'GMホスト' });
+const gmRow = host.locator('.field-row', { hasText: 'GMの決め方' });
+await gmRow.locator('select').first().selectOption('named');
+await gmRow.locator('select').nth(1).selectOption({ label: 'GMホスト' });
 await host.waitForTimeout(500);
 await shot(host, '01-host-lobby');
 await shot(a, '02-guest-lobby');

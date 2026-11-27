@@ -23,7 +23,7 @@ const CUE_EXPRESSION: Record<GmCue, GmExpression> = {
   wrong: 'smug',
 };
 
-/** 表情名と画像ファイル名の対応。smug.webp が届くまではsmileの絵を使う */
+/** 表情名と画像ファイル名の対応 (client/public/gm/<名前>.webp) */
 const EXPRESSION_IMAGE: Record<GmExpression, string> = {
   normal: 'normal',
   smile: 'smile',
