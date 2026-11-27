@@ -195,6 +195,7 @@ export class Room {
     const next = this.players.find((p) => p.connected);
     if (!next) return false;
     this.hostId = next.id;
+    this.dropSuggestions(next.id);
     this.notice = `${next.name} さんがホストになりました`;
     return true;
   }
@@ -211,6 +212,7 @@ export class Room {
       const next = this.players.find((p) => p.connected && p.id !== playerId);
       if (next) {
         this.hostId = next.id;
+        this.dropSuggestions(next.id);
         this.notice = `${next.name} さんがホストになりました`;
       } else {
         this.hostId = '';
