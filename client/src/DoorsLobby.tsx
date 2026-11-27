@@ -24,13 +24,21 @@ export function doorsStartBlocker(view: RoomView): string {
   return '';
 }
 
+/** ランダムで引いておいた次のGMの名前。引けていなければ undefined */
+function nextGmName(view: RoomView): string | undefined {
+  return view.players.find((p) => p.id === view.nextGmId)?.name;
+}
+
 /** 参加者の画面に出す、10の扉の設定の一覧 */
 export function DoorsSummary({ view }: { view: RoomView }) {
   const s = view.doorsSettings;
   const gmName = view.players.find((p) => p.id === s.gmId)?.name;
+  const drawn = nextGmName(view);
+  const gmLabel =
+    s.gmPick === 'named' ? `指名 (${gmName ?? '未指名'})` : s.gmPick === 'random' && drawn ? `ランダム (次は ${drawn} さん)` : GM_PICK_LABEL[s.gmPick];
   return (
     <ul className="settings-summary">
-      <li>GM: {s.gmPick === 'named' ? `指名 (${gmName ?? '未指名'})` : GM_PICK_LABEL[s.gmPick]}</li>
+      <li>GM: {gmLabel}</li>
       <li>質問回数: {s.questions} 回</li>
       <li>嘘の上限: {s.maxLies === 0 ? 'なし' : `最大 ${s.maxLies} 回`}</li>
       <li>制限時間: {s.timeLimitMin === 0 ? 'なし' : `${s.timeLimitMin} 分`}</li>
@@ -84,6 +92,14 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
               </option>
             ))}
           </select>
+        )}
+        {s.gmPick === 'random' && nextGmName(view) && (
+          <>
+            <span>次のGM: {nextGmName(view)} さん</span>
+            <button type="button" className="small" onClick={() => act('doors:reroll-gm')}>
+              引き直す
+            </button>
+          </>
         )}
       </m.div>
       <m.div className="field-row" variants={variants}>

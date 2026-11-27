@@ -76,6 +76,8 @@ export class Room {
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
   lastGmId = '';
+  /** GMがランダムのとき、ロビーで先に引いておいた次のGM。開始時はこの人がGMになる */
+  nextGmId = '';
   /** AI GMがこのルームで使った答え (古い順) */
   aiAnswers: string[] = [];
   cardsPerPlayer = 1;
@@ -281,9 +283,38 @@ export class Room {
       if (!gm) throw new GameError('指名したGMが接続していません。GMを指名し直してください');
       return gm;
     }
-    // 3人以上なら、直前のGMを候補から外す
-    const pool = seated.length >= 3 ? seated.filter((p) => p.id !== this.lastGmId) : seated;
-    return pool[Math.floor(Math.random() * pool.length)]!;
+    const gm = seated.find((p) => p.id === this.ensureNextGm());
+    if (!gm) throw new GameError('GMを抽選できませんでした');
+    return gm;
+  }
+
+  /** ランダムのGMの抽選対象。3人以上なら、直前のGMを外す */
+  private randomGmPool(): Player[] {
+    const seated = this.players.filter((p) => p.connected);
+    return seated.length >= 3 ? seated.filter((p) => p.id !== this.lastGmId) : seated;
+  }
+
+  /**
+   * ロビーで次のGMを先に引いておき、誰がGMか全員に見せる。
+   * 引いた人が抽選対象から外れた (切断・退出など) ときだけ引き直す。ランダム以外やロビー以外では空
+   */
+  private ensureNextGm(): string {
+    if (this.phase !== 'lobby' || this.mode !== 'doors' || this.doorsSettings.gmPick !== 'random') return '';
+    const pool = this.randomGmPool();
+    if (pool.length === 0) return (this.nextGmId = '');
+    if (!pool.some((p) => p.id === this.nextGmId)) this.nextGmId = pool[Math.floor(Math.random() * pool.length)]!.id;
+    return this.nextGmId;
+  }
+
+  /** ホストが次のGMを引き直す。候補が2人以上なら今の人以外から引く */
+  rerollGm(playerId: string): void {
+    this.requireHost(playerId);
+    if (this.phase !== 'lobby') throw new GameError('ロビーでだけ引き直せます');
+    if (this.mode !== 'doors' || this.doorsSettings.gmPick !== 'random') throw new GameError('GMがランダムのときだけ引き直せます');
+    const pool = this.randomGmPool();
+    const others = pool.length >= 2 ? pool.filter((p) => p.id !== this.nextGmId) : pool;
+    if (others.length === 0) throw new GameError('抽選できる人がいません');
+    this.nextGmId = others[Math.floor(Math.random() * others.length)]!.id;
   }
 
   private startDoors(seated: readonly Player[]): void {
@@ -299,6 +330,7 @@ export class Room {
     const gm = this.pickGm(seated);
     this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs(), this.turnLimitMs());
     this.lastGmId = gm.id;
+    this.nextGmId = '';
     this.round += 1;
     this.notice = `${gm.name} さんがGMです`;
     this.phase = this.doors.phase;
@@ -515,6 +547,7 @@ export class Room {
       topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
       aiAvailable: isAskConfigured(),
+      nextGmId: this.ensureNextGm(),
       notice: this.notice,
       round: this.round,
       players: this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected })),

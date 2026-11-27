@@ -363,6 +363,7 @@ io.on('connection', (socket: GameSocket) => {
   // ---- 10の扉 ----
   socket.on('mode', withRoom(socket, (room, pid, p) => room.setMode(pid, p.mode)));
   socket.on('doors:settings', withRoom(socket, (room, pid, p) => room.setDoorsSettings(pid, p)));
+  socket.on('doors:reroll-gm', withRoom(socket, (room, pid) => room.rerollGm(pid)));
   socket.on(
     'doors:answer',
     withRoom(socket, (room, pid, p) =>
