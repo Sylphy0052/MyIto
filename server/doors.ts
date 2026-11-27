@@ -248,16 +248,10 @@ export class DoorsRound {
     return false;
   }
 
-  /** 手番の時間切れ。質問回数を1つ使い、残り回数を超える承認待ちを新しい順に取り消す */
+  /** 手番の時間切れ。質問回数を1つ使う。ストック中の提案は残し、回数を使い切ったら settle が捨てる */
   private expireTurn(): void {
     this.used += 1;
     this.turnTimeoutCount += 1;
-    const room = Math.max(0, this.limit - this.used);
-    const pending = this.proposals.filter((p) => p.status === 'proposed' && !p.isFinal);
-    for (const p of pending.slice(room).reverse()) {
-      p.status = 'cancelled';
-      p.cancelledByName = '(手番の時間切れ)';
-    }
     this.resetTurn();
     this.settle();
   }
@@ -281,17 +275,17 @@ export class DoorsRound {
     const seat = this.requireRespondent(playerId, seats);
     if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
     if (!text) throw new GameError('内容を入力してください');
-    if (this.proposals.length >= LIMITS.doorsLog) throw new GameError('ログが上限に達しました');
     const isFinal = this.phase === 'doors-final';
+    // 質問の段階のストックでログを埋めても、最終解答の分は残す
+    const logCap = isFinal ? LIMITS.doorsLog : LIMITS.doorsLog - LIMITS.doorsFinalReserve;
+    if (this.proposals.length >= logCap) {
+      throw new GameError(isFinal ? 'ログが上限に達しました' : 'ログが上限に達しました。残りは最終解答の分です');
+    }
     if (isFinal) {
       if (this.proposals.some((p) => isActive(p) && p.isFinal)) throw new GameError('最終解答は1件ずつ出せます');
     } else {
+      // 残り回数・1人あたりの件数を超えてストックできる。回数を使い切った時点で残りは settle が捨てる
       if (kind !== 'question' && kind !== 'guess') throw new GameError('質問か解答を選んでください');
-      if (this.activeCount() >= this.limit - this.used) throw new GameError('残り回数を超えて提案できません');
-      const mine = this.proposals.filter((p) => p.authorId === playerId && p.status === 'proposed').length;
-      if (mine >= LIMITS.doorsPendingPerPlayer) {
-        throw new GameError(`承認待ちは1人${LIMITS.doorsPendingPerPlayer}件までです`);
-      }
     }
     this.proposals.push({
       id: randomUUID(),
@@ -533,8 +527,9 @@ export class DoorsRound {
       return;
     }
     if (delta === -1) {
-      const floor = Math.max(1, this.used + this.activeCount());
-      if (this.limit - 1 < floor) throw new GameError('使用済みと処理中の回数より減らせません');
+      // ストック中の提案は回数を使い切れば捨てるので数えない。AIが答えている最中の1件だけは枠を残す
+      const floor = Math.max(1, this.used + (this.aiBusyId ? 1 : 0));
+      if (this.limit - 1 < floor) throw new GameError('使用済みとAIが回答中の回数より減らせません');
       this.limit -= 1;
       this.settle();
       return;
@@ -587,8 +582,14 @@ export class DoorsRound {
 
   // ---- 進行 ----
 
-  /** 回数を使い切り、処理中の提案が無くなったら最終解答へ進む */
+  /**
+   * 回数を使い切ったら、残っているストック (承認待ち・送信済み) を捨てて最終解答へ進む。
+   * 時間切れのときは、送信済みの提案が片付いてから進む
+   */
   private settle(): void {
+    if (this.phase === 'doors-asking' && this.used >= this.limit) {
+      for (const p of this.proposals) if (isActive(p) && !p.isFinal) p.status = 'discarded';
+    }
     if (this.phase === 'doors-asking' && (this.used >= this.limit || this.isTimeUp) && this.activeCount() === 0) {
       this.phase = 'doors-final';
     }
