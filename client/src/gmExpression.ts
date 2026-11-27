@@ -51,7 +51,3 @@ export function gmCueFor(doors: DoorsView): GmCue {
   const lastReply = doors.proposals.filter((p) => p.status === 'answered' && p.reply).at(-1)?.reply;
   return lastReply ?? 'idle';
 }
-
-export function gmExpressionFor(doors: DoorsView): GmExpression {
-  return expressionForCue(gmCueFor(doors));
-}

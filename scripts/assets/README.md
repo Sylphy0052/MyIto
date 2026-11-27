@@ -82,7 +82,7 @@ uv run --with "rembg[cpu]" --with pillow python3 scripts/assets/finalize.py --in
 python3 scripts/assets/finalize.py --in out --only bgm
 ```
 
-- 立ち絵の表情名の対応は、通常=normal、笑顔=smile、照れ=shy、怒り=angry、泣き=cry、驚き=surprised、困惑=confused です。`finalize.py` が `EXPRESSION_FILES` として持っています。
+- 立ち絵の表情名の対応は、通常=normal、笑顔=smile、照れ=shy、怒り=angry、泣き=cry、驚き=surprised、困惑=confused、ドヤ顔=smug です。`finalize.py` が `EXPRESSION_FILES` として持っています。
 - WebPは幅512に縮小し、8枚の合計が1MB以内になる最初のqualityを自動で選びます。`--quality 80` のように固定もできます。
 - BGMは前後の無音を除去し、終わり4秒を頭へ重ねてループにし、-20 LUFS・TP -2で128kのmp3にします。
 - 出力先は `--public` で変えられます（既定 `client/public`）。

@@ -1,30 +1,36 @@
 import { AnimatePresence, m, type Variants } from 'motion/react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DoorsView } from '../../shared/types';
 import { expressionForCue, gmCueFor, gmImageFor, type GmCue } from './gmExpression';
 
 /** 漫符を出しておく時間 (ms) */
 const MARK_MS = 1300;
 
-const KEYFRAME_TIMES = { duration: 0.6, ease: 'easeInOut' } as const;
-const SINK_TIMES = { duration: 1, ease: 'easeInOut' } as const;
+const KEYFRAME_TRANSITION = { duration: 0.6, ease: 'easeInOut' } as const;
+const SINK_TRANSITION = { duration: 1, ease: 'easeInOut' } as const;
 
-/** 合図が変わった瞬間のワンショットの動き。reduced-motionでは MotionConfig がtransformを止める */
+const HOP = { y: [0, -10, 0, -5, 0], transition: KEYFRAME_TRANSITION }; // yes: 小さく弾む
+const JUMP = { y: [0, -18, 0, -8, 0], transition: KEYFRAME_TRANSITION }; // close・correct: 跳ねる
+const TILT = { rotate: [0, 6, 4, 6, 0], transition: KEYFRAME_TRANSITION }; // unknown・maybe-no: 首をかしげる
+const PUFF = { scaleY: [1, 1.06, 1], transition: KEYFRAME_TRANSITION }; // wrong・lose: 胸を張る
+const SINK = { y: [0, 12, 12, 0], transition: SINK_TRANSITION }; // win・error: 沈む
+
+/** 合図が変わった瞬間のワンショットの動き。reduced-motionでは client/src/main.tsx の MotionConfig がtransformを止める */
 const CUE_MOTION: Variants = {
   idle: {},
   thinking: {},
-  yes: { y: [0, -10, 0, -5, 0], transition: KEYFRAME_TIMES },
-  no: { rotate: [0, -6, 6, -5, 5, 0], transition: KEYFRAME_TIMES },
-  'maybe-yes': { scale: [1, 0.94, 1], transition: KEYFRAME_TIMES },
-  unknown: { rotate: [0, 6, 4, 6, 0], transition: KEYFRAME_TIMES },
-  'maybe-no': { rotate: [0, 6, 4, 6, 0], transition: KEYFRAME_TIMES },
-  close: { y: [0, -18, 0, -8, 0], transition: KEYFRAME_TIMES },
-  correct: { y: [0, -18, 0, -8, 0], transition: KEYFRAME_TIMES },
-  wrong: { scaleY: [1, 1.06, 1], transition: KEYFRAME_TIMES },
-  lose: { scaleY: [1, 1.06, 1], transition: KEYFRAME_TIMES },
-  win: { y: [0, 12, 12, 0], transition: SINK_TIMES },
-  error: { y: [0, 12, 12, 0], transition: SINK_TIMES },
-  aborted: { x: [0, -8, 8, -8, 8, 0], transition: KEYFRAME_TIMES },
+  yes: HOP,
+  no: { rotate: [0, -6, 6, -5, 5, 0], transition: KEYFRAME_TRANSITION },
+  'maybe-yes': { scale: [1, 0.94, 1], transition: KEYFRAME_TRANSITION },
+  unknown: TILT,
+  'maybe-no': TILT,
+  close: JUMP,
+  correct: JUMP,
+  wrong: PUFF,
+  lose: PUFF,
+  win: SINK,
+  error: SINK,
+  aborted: { x: [0, -8, 8, -8, 8, 0], transition: KEYFRAME_TRANSITION },
 };
 
 const TEAR = (
@@ -71,8 +77,12 @@ export function GmPortrait({ doors }: { doors: DoorsView }) {
 function AiPortrait({ cue }: { cue: GmCue }) {
   const expression = expressionForCue(cue);
   const [markCue, setMarkCue] = useState<GmCue | null>(null);
+  // 前回の合図。表示を開いた時点の合図は「変わった」ではないので、漫符を出さない (動きも initial={false} で出ない)
+  const prevCue = useRef(cue);
 
   useEffect(() => {
+    if (prevCue.current === cue) return;
+    prevCue.current = cue;
     // 合図が変わったら、表示中の漫符はすぐ新しいものに入れ替える
     setMarkCue(cue in CUE_MARK ? cue : null);
     const timer = setTimeout(() => setMarkCue(null), MARK_MS);

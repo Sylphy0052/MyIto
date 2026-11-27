@@ -311,7 +311,7 @@ def cmd_expressions(args: argparse.Namespace) -> None:
     if not faces:
         raise SystemExit("顔の枠が取れなかった")
     box = max(faces, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
-    names = args.only or EXPRESSIONS[1:]
+    names = list(dict.fromkeys(args.only)) if args.only else EXPRESSIONS[1:]
     for name in names:
         # 表情の差分は顔だけなので自然文は付けない
         positive = positive_of(ch, TAGS[name], with_text=False)
@@ -347,7 +347,12 @@ def main() -> None:
         "--only", nargs="+", choices=EXPRESSIONS[1:], help="作り直す表情だけ指定"
     )
     expr.add_argument(
-        "--count", type=int, default=1, help="表情ごとの候補数（2以上で名前-番号.png）"
+        "--count",
+        type=int,
+        default=1,
+        choices=range(1, 100),
+        metavar="N",
+        help="表情ごとの候補数（1以上。2以上で名前-番号.png）",
     )
     expr.set_defaults(func=cmd_expressions)
     args = parser.parse_args()
