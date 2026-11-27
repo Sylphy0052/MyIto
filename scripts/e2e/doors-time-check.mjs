@@ -1,7 +1,8 @@
 // 10の扉の制限時間を3クライアント (GM 1 + 回答者 2) で通す
-// サーバは `DOORS_MINUTE_MS=4000` で起動する (1分を4秒に縮める。3分 = 12秒)
+// サーバは `DOORS_MINUTE_MS=6000` で起動する (1分を6秒に縮める。3分 = 18秒)
 // 流れ: 3分設定 → 答えの確定から数える → 時間切れで承認待ちが取り消され新規提案が断られる → GMが答えると最終解答へ
-//       → 「時間 +1分」で質問へ戻る → 回数を使い切った最終解答の段階では締切を過ぎても時間切れの案内が出ない
+//       → 「時間 +1分」で質問へ戻る → 回数を使い切った最終解答の段階にも残り時間が出て、GMへ届いた最終解答の判定待ちの間は止まる
+//       → 最終解答の段階で残りが0になると負けで終わる
 // 使い方: node doors-time-check.mjs <base URL> <screenshot dir>
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -10,7 +11,7 @@ const base = process.argv[2] ?? 'http://localhost:47213';
 const out = process.argv[3] ?? './shots-doors-time';
 mkdirSync(out, { recursive: true });
 
-const MINUTE_MS = 4000;
+const MINUTE_MS = 6000;
 const TAG = `t${Date.now() % 100000}`;
 const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const results = [];
@@ -103,14 +104,20 @@ await gm.getByRole('button', { name: '確定' }).click();
 const startedAt = Date.now();
 check('確定すると全員に残り時間が出る', (await Promise.all(all.map((p) => until(p.locator('.time-left strong').first().waitFor({ timeout: 5000 }))))).every(Boolean));
 const t0 = await timeLeftText(ra);
-check('残り時間は 0:12 以下から始まる (3分 = 12秒)', /残り\s*0:(0\d|1[0-2])/.test(t0), t0);
+check('残り時間は 0:18 以下から始まる (3分 = 18秒)', /残り\s*0:(0\d|1[0-8])/.test(t0), t0);
 
-// ---- 時間切れの前に、届いた質問と承認待ちの質問を作る ----
+// ---- GMへ届いた質問の間は止まり、承認待ちの間は進む ----
 const q1 = `生き物ですか? ${TAG}`;
 const q2 = `空を飛びますか? ${TAG}`;
 await propose(ra, q1);
 await item(rb, q1).getByRole('button', { name: 'OK', exact: true }).click();
 await gm.locator('li', { hasText: q1 }).filter({ has: gm.locator('.reply-button') }).first().waitFor({ timeout: 5000 });
+await ra.waitForTimeout(200);
+const pausedA = await timeLeftText(ra);
+await ra.waitForTimeout(MINUTE_MS / 2);
+check('GMへ届いた質問の間は残り時間が止まり、止まっていると分かる', (await timeLeftText(ra)) === pausedA && pausedA.includes('GMの回答待ち'), `${pausedA} → ${await timeLeftText(ra)}`);
+await shotAll('02a-paused', all);
+await gmReply(gm, q1, 'Yes');
 await propose(ra, q2);
 await shotAll('02-running', all);
 check('全員の残り時間が近い値 (差 2 秒以内)', await (async () => {
@@ -128,18 +135,8 @@ check('時間切れの案内が全員に出る', (await Promise.all(all.map((p) 
 console.log(`  (確定から ${Math.round((Date.now() - startedAt) / 100) / 10} 秒)`);
 await shotAll('03-time-up', all);
 check('承認待ちの質問は「(時間切れ)」で取り消される', await until(item(rb, q2).getByText('(時間切れ)').first().waitFor({ timeout: 5000 })));
-check('時間切れのあと、新しい質問はサーバに断られて出ない', await (async () => {
-  await ra.getByRole('radio', { name: '質問' }).click();
-  await ra.locator('.proposal-form input').first().fill(`断られる質問 ${TAG}`);
-  await ra.locator('.proposal-form').getByRole('button', { name: '提案' }).click();
-  await ra.waitForTimeout(800);
-  return (await item(ra, `断られる質問 ${TAG}`).count()) === 0;
-})());
-check('届いている質問が残るので、まだ最終解答には進まない', (await ra.getByText(/最終解答を出す/).count()) === 0);
-
-// ---- GMが答えると最終解答へ ----
-await gmReply(gm, q1, 'Yes');
-check('届いていた質問に答えると最終解答の段階へ進む', await until(ra.getByText('最終解答を出す').first().waitFor({ timeout: 5000 })));
+check('承認待ちしか無いので、時間切れですぐ最終解答の段階へ進む', await until(ra.getByText('最終解答を出す').first().waitFor({ timeout: 5000 })));
+check('最終解答の段階は残り60秒 (6秒) から数え、時間切れの表示は出ない', /残り\s*0:0[0-6]/.test(await timeLeftText(ra)), await timeLeftText(ra));
 check('「時間切れのため、質問へ戻るには…」の案内がGMに出る', await until(gm.getByText(/質問へ戻るには「時間 \+1分」/).first().waitFor({ timeout: 5000 })));
 await shotAll('04-final', all);
 
@@ -155,18 +152,18 @@ const leftSec = async (p) => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : -1;
 };
 const beforeExtend = await leftSec(ra);
-// 後の q3・q4 の提案と回答を締切までに終えられるよう、8回延ばして余裕を持たせる (残りはおよそ 36 秒)
+// 後の q3・q4 の提案と回答を締切までに終えられるよう、8回延ばして余裕を持たせる (残りはおよそ 54 秒)
 const EXTEND_TIMES = 8;
 for (let i = 0; i < EXTEND_TIMES; i += 1) {
   await gm.getByRole('button', { name: '時間 +1分' }).click();
   await gm.waitForTimeout(300);
 }
 const afterExtend = await leftSec(ra);
-// 8回で 32 秒延びる (1分 = 4秒)。押す間の経過 (1回およそ0.5秒) と表示の丸めを見込んで 24 秒以上増えていればよい
-check(`「時間 +1分」を${EXTEND_TIMES}回押すと、全員の残り時間が延びる`, afterExtend - beforeExtend >= 24, `${beforeExtend}s → ${afterExtend}s`);
+// 8回で 48 秒延びる (1分 = 6秒)。押す間の経過 (1回およそ0.5秒) と表示の丸めを見込んで 36 秒以上増えていればよい
+check(`「時間 +1分」を${EXTEND_TIMES}回押すと、全員の残り時間が延びる`, afterExtend - beforeExtend >= 36, `${beforeExtend}s → ${afterExtend}s`);
 await shotAll('05-extended', all);
 
-// ---- 回数を使い切って最終解答の段階へ。締切を過ぎても時間切れの案内は出ない ----
+// ---- 回数を使い切って最終解答の段階へ。残り時間が出て、GMへ届いた最終解答の判定待ちの間は止まる ----
 const q3 = `大きいですか? ${TAG}`;
 const q4 = `海にいますか? ${TAG}`;
 await propose(ra, q3);
@@ -176,33 +173,45 @@ await propose(ra, q4);
 await item(rb, q4).getByRole('button', { name: 'OK', exact: true }).click();
 await gmReply(gm, q4, 'Yes');
 check('回数を使い切ると最終解答の段階へ進む', await until(ra.getByText('最終解答を出す').first().waitFor({ timeout: 5000 })));
-const noticeBefore = await ra.getByText('時間切れ。最終解答へ進みます').count();
-// 延長のあとの残りは最大でおよそ 36 秒 (4秒 + 32秒)。それより長く待って締切を確実に過ぎる
-await ra.waitForTimeout(MINUTE_MS * 10);
-check('最終解答の段階で締切を過ぎても、時間切れの案内は出ない', noticeBefore === 0 && (await ra.getByText('時間切れ。最終解答へ進みます').count()) === 0 && (await ra.locator('.time-left').count()) === 0);
-await shotAll('06-final-after-deadline', all);
-
-// ---- 終了 ----
-await ra.getByRole('radio', { name: '解答' }).waitFor({ timeout: 3000 }).catch(() => {});
+check('最終解答の段階にも残り時間が出る', await until(ra.locator('.time-left strong').first().waitFor({ timeout: 5000 })));
 await ra.locator('.proposal-form input').first().fill('ペンギン');
 await ra.locator('.proposal-form').getByRole('button', { name: '提案' }).click();
 await item(rb, 'ペンギン').getByRole('button', { name: 'OK', exact: true }).click();
+await gm.locator('li', { hasText: 'ペンギン' }).filter({ has: gm.locator('.reply-button') }).first().waitFor({ timeout: 5000 });
+await ra.waitForTimeout(500);
+const pausedLeft = await leftSec(ra);
+// 延長のあとの残りは最大でおよそ 54 秒 (6秒 + 48秒)。それより長く待っても、判定待ちの間は止まって終わらない
+await ra.waitForTimeout(MINUTE_MS * 10);
+check('GMへ届いた最終解答の判定待ちの間は止まり、時間切れで終わらない', (await leftSec(ra)) === pausedLeft && (await ra.getByText('(GMの回答待ち)').count()) > 0 && (await ra.getByText('回答者の負け').count()) === 0, `${pausedLeft}s → ${await leftSec(ra)}s`);
+await shotAll('06-final-paused', all);
+
+// ---- 終了 ----
 await gmReply(gm, 'ペンギン', '正解');
 check('最終解答が正解なら回答者の勝ちで終わる', await until(ra.getByText('回答者の勝ち').first().waitFor({ timeout: 8000 })));
 check('結果画面に制限時間と時間切れが出る', await until(ra.getByText('制限時間: 3分 (時間切れあり)').first().waitFor({ timeout: 5000 })));
 await shotAll('07-result', all);
 check('結果画面で横あふれしない', (await overflowed(all)).length === 0, (await overflowed(all)).join(','));
 
-// ---- 制限時間ありのラウンドを中止すると、締切を過ぎても結果画面のまま ----
-// 画面の動きを確かめる検査。中止でタイマーを止め忘れても、発火時の確認 (同じラウンドかつ質問の段階か) で何も起きないので、
-// タイマーの止め忘れそのものはこの検査では見分けられない
-
+// ---- 最終解答の段階で残りが0になると負けで終わる (制限時間3分 = 18秒 → 時間切れ → 最終解答は6秒から) ----
 async function startRound() {
   await gm.getByRole('button', { name: /^開始/ }).click();
   await gm.locator('input[placeholder^="答え"]').waitFor({ timeout: 5000 });
   await gm.locator('input[placeholder^="答え"]').fill('ペンギン');
   await gm.getByRole('button', { name: '確定' }).click();
 }
+await gm.getByRole('button', { name: /ロビーに戻る/ }).click();
+await gm.getByRole('button', { name: /^開始/ }).waitFor({ timeout: 5000 });
+await startRound();
+await ra.getByText('最終解答を出す').first().waitFor({ timeout: MINUTE_MS * 4 + 5000 });
+check('最終解答の段階では残り時間が出る', await until(ra.locator('.time-left strong').first().waitFor({ timeout: 3000 })));
+await ra.getByText(/回答者の負け/).first().waitFor({ timeout: MINUTE_MS * 2 + 5000 }).catch(() => {});
+check('最終解答のまま残りが0になると、回答者の負け (時間切れ) で終わる', (await ra.getByText('回答者の負け (時間切れ)').count()) > 0);
+await shotAll('07b-final-timeout', all);
+
+// ---- 制限時間ありのラウンドを中止すると、締切を過ぎても結果画面のまま ----
+// 画面の動きを確かめる検査。中止でタイマーを止め忘れても、発火時の確認 (同じラウンドかつ質問の段階か) で何も起きないので、
+// タイマーの止め忘れそのものはこの検査では見分けられない
+
 await gm.getByRole('button', { name: /ロビーに戻る/ }).click();
 await gm.getByRole('button', { name: /^開始/ }).waitFor({ timeout: 5000 });
 await startRound();

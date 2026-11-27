@@ -82,7 +82,7 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
       <m.div className="field-row" variants={variants}>
         <span className="label">GMの決め方</span>
         <select value={s.gmPick} onChange={(e) => act('doors:settings', { gmPick: e.target.value })}>
-          <option value="random">ランダム (毎ラウンド抽選)</option>
+          <option value="random">ランダム (ロビーで抽選)</option>
           <option value="named">プレイヤー指名</option>
           <option value="ai" disabled={!view.aiAvailable}>
             AI (全員が回答者)
