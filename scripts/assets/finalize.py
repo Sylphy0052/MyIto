@@ -28,6 +28,7 @@ EXPRESSION_FILES = {
     "泣き": "cry",
     "驚き": "surprised",
     "困惑": "confused",
+    "ドヤ顔": "smug",
 }
 RM_MODEL = "isnet-anime"
 ALPHA_EDGE = 16  # 余白とみなす透明度の上限（cutout.ALPHA_EDGEと同じ）
@@ -60,9 +61,12 @@ def cutout(source: Path):
     session = _session()
     image = Image.open(source).convert("RGB")
     cut = remove(image, session=session)
-    # 人物の外側の透明な余白を切り詰める
-    box = cut.getchannel("A").point(lambda a: 255 if a > ALPHA_EDGE else 0).getbbox()
-    return cut.crop(box) if box else cut
+    return cut
+
+
+def content_box(cut):
+    """人物の外側の透明な余白を除いた範囲"""
+    return cut.getchannel("A").point(lambda a: 255 if a > ALPHA_EDGE else 0).getbbox()
 
 
 _cached_session = None
@@ -86,15 +90,22 @@ def encode_webp(image, quality: int) -> bytes:
 def finalize_portrait(src_dir: Path, dest: Path, quality: int | None) -> None:
     from PIL import Image
 
-    images = {}
+    cuts = {}
     for jp, en in EXPRESSION_FILES.items():
         source = src_dir / f"{jp}.png"
         if not source.is_file():
             raise SystemExit(f"表情の画像が無い: {source}")
-        cut = cutout(source)
+        cuts[en] = cutout(source)
+    # 涙や汗がはみ出しても表情ごとに大きさがずれないよう、全表情の範囲の和を共通の切り抜き枠にする
+    boxes = [b for b in (content_box(c) for c in cuts.values()) if b]
+    if boxes:
+        frame = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+        cuts = {en: c.crop(frame) for en, c in cuts.items()}
+    images = {}
+    for en, cut in cuts.items():
         height = round(cut.height * PORTRAIT_WIDTH / cut.width)
         images[en] = cut.resize((PORTRAIT_WIDTH, height), Image.LANCZOS)
-    # 品質を下げながら、7枚の合計が上限に収まる最初の値を採る（--qualityで固定もできる）
+    # 品質を下げながら、8枚の合計が上限に収まる最初の値を採る（--qualityで固定もできる）
     steps = (quality,) if quality is not None else QUALITY_STEPS
     for q in steps:
         encoded = {en: encode_webp(im, q) for en, im in images.items()}

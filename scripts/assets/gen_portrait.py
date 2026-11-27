@@ -30,17 +30,26 @@ DETECT_THRESHOLD = 0.3
 BOX_MARGIN = 0.03  # 枠を広げる幅（短辺に対する割合）
 SHAPE_GROW = 0.03  # 顔のマスクを太らせる幅（短辺に対する割合）
 REDRAW_BLUR = (31, 10.0)  # 描き直した所の縁をぼかす（ImageBlurの半径・sigma）
-DENOISE = 0.55  # expressions.DENOISE
+DENOISE = 0.75  # expressions.DENOISE
 
 # expressions.pyのEXPRESSIONS・TAGS。通常は元の画像のまま
-EXPRESSIONS = ("通常", "笑顔", "照れ", "怒り", "泣き", "驚き", "困惑")
+EXPRESSIONS = ("通常", "笑顔", "照れ", "怒り", "泣き", "驚き", "困惑", "ドヤ顔")
 TAGS = {
-    "笑顔": "smile, open mouth, happy, :d",
-    "照れ": "blush, embarrassed, shy, light smile, looking away",
-    "怒り": "angry, frown, v-shaped eyebrows, clenched teeth",
-    "泣き": "crying, tears, sad, streaming tears, frown",
-    "驚き": "surprised, wide-eyed, open mouth, raised eyebrows",
-    "困惑": "confused, troubled eyebrows, sweatdrop, frown, closed mouth",
+    "笑顔": "smile, open mouth, laughing, happy, closed eyes, ^_^",
+    "照れ": "full-face blush, embarrassed, flustered, wavy mouth, nose blush, "
+    "looking down, averting eyes, sweatdrop",
+    "怒り": "angry, frown, v-shaped eyebrows, clenched teeth, puffed cheeks, angry vein",
+    "泣き": "crying, streaming tears, tears, sad, open mouth, wavy mouth, frown, "
+    "furrowed brow",
+    "驚き": "surprised, shocked, wide-eyed, wide open mouth, raised eyebrows",
+    "困惑": "confused, @_@, troubled eyebrows, sweatdrop, frown, closed mouth",
+    "ドヤ顔": "smug, half-closed eyes, smirk, raised eyebrow, confident, "
+    "closed mouth, looking at viewer",
+}
+# 表情ごとに足すnegative。基準画像の頬の赤みが照れ・通常と紛れるのを防ぐ
+NEGATIVE_EXTRA = {
+    "泣き": "smile",
+    "ドヤ顔": "blush, smile, open mouth",
 }
 
 Box = tuple[int, int, int, int]
@@ -302,13 +311,17 @@ def cmd_expressions(args: argparse.Namespace) -> None:
     if not faces:
         raise SystemExit("顔の枠が取れなかった")
     box = max(faces, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
-    for name in EXPRESSIONS[1:]:
-        seed = args.seed if args.seed is not None else random.randrange(2**32)
+    names = list(dict.fromkeys(args.only)) if args.only else EXPRESSIONS[1:]
+    for name in names:
         # 表情の差分は顔だけなので自然文は付けない
         positive = positive_of(ch, TAGS[name], with_text=False)
-        out = args.out / f"{name}.png"
-        redraw_face(args.base, box, positive, negative, seed, out)
-        print(f"保存: {out} (seed={seed})")
+        neg = ", ".join(filter(None, [negative, NEGATIVE_EXTRA.get(name, "")]))
+        for i in range(args.count):
+            seed = args.seed + i if args.seed is not None else random.randrange(2**32)
+            stem = name if args.count == 1 else f"{name}-{i}"
+            out = args.out / f"{stem}.png"
+            redraw_face(args.base, box, positive, neg, seed, out)
+            print(f"保存: {out} (seed={seed})")
 
 
 def main() -> None:
@@ -324,11 +337,22 @@ def main() -> None:
         "--seed", type=int, help="先頭のseed（候補ごとに+1）。省略でランダム"
     )
     base.set_defaults(func=cmd_base)
-    expr = sub.add_parser("expressions", help="選んだ1枚から7表情を作る")
+    expr = sub.add_parser("expressions", help="選んだ1枚から8表情を作る")
     expr.add_argument("--base", type=Path, required=True)
     expr.add_argument("--out", type=Path, required=True)
     expr.add_argument(
-        "--seed", type=int, help="全表情で同じseed。省略で表情ごとにランダム"
+        "--seed", type=int, help="全表情で同じseed（候補ごとに+1）。省略でランダム"
+    )
+    expr.add_argument(
+        "--only", nargs="+", choices=EXPRESSIONS[1:], help="作り直す表情だけ指定"
+    )
+    expr.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        choices=range(1, 100),
+        metavar="N",
+        help="表情ごとの候補数（1以上。2以上で名前-番号.png）",
     )
     expr.set_defaults(func=cmd_expressions)
     args = parser.parse_args()

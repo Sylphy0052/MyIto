@@ -12,3 +12,4 @@
 - [powershell.exe経由のsshで複数コマンドが壊れる](b90-powershell-ssh-quoting.md) — `&&`と二重引用符の入れ子を避け、1コマンドずつ分ける
 - [b90の公開コンテナを入れ替える](b90-redeploy-live-container.md) — ~/MyIto-liveでビルドしてcompose runで単発起動。1回目の起動が失敗することがある
 - [e2eでGMの決め方のselectを掴めずタイムアウトする](e2e-lobby-select-by-row.md) — labelと結びついていない。`.field-row`の見出しで絞って掴む
+- [worktree作業中に相対パスでfinalize.pyを流す](finalize-from-main-cwd.md) — cwdがmainのままだと古いスクリプトがmain側へ書く。絶対パスと`--public`を明示する
