@@ -23,20 +23,9 @@ const CUE_EXPRESSION: Record<GmCue, GmExpression> = {
   wrong: 'smug',
 };
 
-/** 表情名と画像ファイル名の対応 (client/public/gm/<名前>.webp) */
-const EXPRESSION_IMAGE: Record<GmExpression, string> = {
-  normal: 'normal',
-  smile: 'smile',
-  shy: 'shy',
-  angry: 'angry',
-  cry: 'cry',
-  surprised: 'surprised',
-  confused: 'confused',
-  smug: 'smug',
-};
-
+/** 表情の画像のパス (client/public/gm/<表情名>.webp) */
 export function gmImageFor(expression: GmExpression): string {
-  return `/gm/${EXPRESSION_IMAGE[expression]}.webp`;
+  return `/gm/${expression}.webp`;
 }
 
 export function expressionForCue(cue: GmCue): GmExpression {

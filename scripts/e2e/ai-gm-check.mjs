@@ -89,15 +89,16 @@ rec('再試行後の表示に「AIの応答に失敗」が残らない', !(await
 
 // 3b. 立ち絵: 1280x800で、回答の種類ごとの表情と漫符を撮る (モックはキーワードで unknown / maybe-yes / maybe-no を返す)
 await page.setViewportSize({ width: 1280, height: 800 });
-for (const [file, text, badge] of [
-  ['06a-portrait-unknown', `わからない ${TAG} 質問ですか?`, '分からない'],
-  ['06b-portrait-maybe-yes', `たぶん鳥 ${TAG} ですか?`, 'どちらかといえばYes'],
-  ['06c-portrait-maybe-no', `たぶん違う ${TAG} ですか?`, 'どちらかといえばNo'],
+for (const [file, text, badge, face] of [
+  ['06a-portrait-unknown', `わからない ${TAG} 質問ですか?`, '分からない', 'confused'],
+  ['06b-portrait-maybe-yes', `たぶん鳥 ${TAG} ですか?`, 'どちらかといえばYes', 'shy'],
+  ['06c-portrait-maybe-no', `たぶん違う ${TAG} ですか?`, 'どちらかといえばNo', 'confused'],
 ]) {
   await propose('question', text);
   // 前の質問の回答バッジを拾わないよう、この質問の行の中だけで待つ
   rec(`立ち絵確認: ${file} の質問に回答が付く`, await page.locator('li', { hasText: text }).locator('.reply-badge', { hasText: badge }).first().waitFor({ timeout: 15000 }).then(() => true, () => false));
   await page.waitForTimeout(400); // 動きと漫符が出ている間に撮る
+  rec(`立ち絵確認: ${file} の表情が ${face} になり、漫符が出ている`, (await page.locator('.gm-portrait img').last().getAttribute('src')) === `/gm/${face}.webp` && (await page.locator('.gm-portrait-mark').count()) === 1);
   await page.screenshot({ path: `${out}/${file}.png` });
   await page.waitForTimeout(1500);
 }
