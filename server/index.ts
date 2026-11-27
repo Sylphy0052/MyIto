@@ -69,6 +69,8 @@ function broadcast(room: Room): void {
   room.lastActiveAt = Date.now();
   // 状態が変わるたびに、AI GMが次にすることがあるかを見る。処理中の印は配信の前に付ける
   driveAiGm(room);
+  // 10の扉でGMがランダムなら、ロビーで次のGMを引いておいてから配る (切断・退出・設定変更で決め直す)
+  room.refreshNextGm();
   for (const s of io.sockets.sockets.values() as Iterable<GameSocket>) {
     if (s.data.code === room.code && s.data.playerId) {
       s.emit('state', room.viewFor(s.data.playerId));

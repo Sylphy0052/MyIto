@@ -283,9 +283,15 @@ export class Room {
       if (!gm) throw new GameError('指名したGMが接続していません。GMを指名し直してください');
       return gm;
     }
-    const gm = seated.find((p) => p.id === this.ensureNextGm());
+    this.refreshNextGm();
+    const gm = seated.find((p) => p.id === this.nextGmId);
     if (!gm) throw new GameError('GMを抽選できませんでした');
     return gm;
+  }
+
+  /** ロビーで10の扉のGMをランダムに決める設定か。このときだけ次のGMを先に引いておく */
+  private isRandomGmLobby(): boolean {
+    return this.phase === 'lobby' && this.mode === 'doors' && this.doorsSettings.gmPick === 'random';
   }
 
   /** ランダムのGMの抽選対象。3人以上なら、直前のGMを外す */
@@ -295,25 +301,25 @@ export class Room {
   }
 
   /**
-   * ロビーで次のGMを先に引いておき、誰がGMか全員に見せる。
-   * 引いた人が抽選対象から外れた (切断・退出など) ときだけ引き直す。ランダム以外やロビー以外では空
+   * 次のGM (nextGmId) を今の状態に合わせて決め直す。状態を配る前と、開始時に呼ぶ。
+   * ロビーでGMがランダムなら、引いた人が抽選対象から外れた (切断・退出など) ときだけ引き直す。それ以外では空にする
    */
-  private ensureNextGm(): string {
-    if (this.phase !== 'lobby' || this.mode !== 'doors' || this.doorsSettings.gmPick !== 'random') return '';
+  refreshNextGm(): void {
+    if (!this.isRandomGmLobby()) {
+      this.nextGmId = '';
+      return;
+    }
     const pool = this.randomGmPool();
-    if (pool.length === 0) return (this.nextGmId = '');
-    if (!pool.some((p) => p.id === this.nextGmId)) this.nextGmId = pool[Math.floor(Math.random() * pool.length)]!.id;
-    return this.nextGmId;
+    if (pool.some((p) => p.id === this.nextGmId)) return;
+    this.nextGmId = pool.length === 0 ? '' : pool[Math.floor(Math.random() * pool.length)]!.id;
   }
 
-  /** ホストが次のGMを引き直す。候補が2人以上なら今の人以外から引く */
+  /** ホストが次のGMを引き直す。今の人以外から引く */
   rerollGm(playerId: string): void {
     this.requireHost(playerId);
-    if (this.phase !== 'lobby') throw new GameError('ロビーでだけ引き直せます');
-    if (this.mode !== 'doors' || this.doorsSettings.gmPick !== 'random') throw new GameError('GMがランダムのときだけ引き直せます');
-    const pool = this.randomGmPool();
-    const others = pool.length >= 2 ? pool.filter((p) => p.id !== this.nextGmId) : pool;
-    if (others.length === 0) throw new GameError('抽選できる人がいません');
+    if (!this.isRandomGmLobby()) throw new GameError('ロビーでGMがランダムのときだけ引き直せます');
+    const others = this.randomGmPool().filter((p) => p.id !== this.nextGmId);
+    if (others.length === 0) throw new GameError('ほかに引ける人がいません');
     this.nextGmId = others[Math.floor(Math.random() * others.length)]!.id;
   }
 
@@ -547,7 +553,7 @@ export class Room {
       topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
       aiAvailable: isAskConfigured(),
-      nextGmId: this.ensureNextGm(),
+      nextGmId: this.nextGmId,
       notice: this.notice,
       round: this.round,
       players: this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected })),
