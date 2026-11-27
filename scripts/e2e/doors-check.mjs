@@ -64,7 +64,7 @@ const drawnByHost = await nextGmOf(host);
 check('GMランダムのとき次のGMがホストに出る', drawnByHost !== '');
 check('次のGMがゲストにも同じ名前で出る', drawnByHost !== '' && (await nextGmOf(a)) === drawnByHost);
 await host.getByRole('button', { name: '引き直す' }).click();
-await a.getByText(new RegExp(`次は (?!${drawnByHost} さん).+? さん`)).first().waitFor({ timeout: 5000 }).then(
+await a.getByText(new RegExp(`次は (?!${drawnByHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} さん).+? さん`)).first().waitFor({ timeout: 5000 }).then(
   () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', true),
   () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', false),
 );
