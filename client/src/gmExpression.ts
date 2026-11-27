@@ -32,7 +32,7 @@ const EXPRESSION_IMAGE: Record<GmExpression, string> = {
   cry: 'cry',
   surprised: 'surprised',
   confused: 'confused',
-  smug: 'smile',
+  smug: 'smug',
 };
 
 export function gmImageFor(expression: GmExpression): string {
