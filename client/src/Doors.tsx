@@ -236,11 +236,12 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
   const [isSoundOn, setSoundOn] = useSoundSetting();
   const canExtend = isHost || isGm;
   // 回数を使い切る-1は、ストック中の提案 (GMへ届いた分を含む) を未処理にするので確かめる。
-  // サーバが断る-1 (AIが回答中、回数が1) は確かめずに送る
-  const stockCount = active.filter((p) => !p.isFinal).length;
+  // AIが回答中の1件はサーバと同じく使用済みとして数え、その回答が付いた時点で使い切る場合も確かめる。
+  // サーバが断る-1 (下限を割る、回数が1) は確かめずに送る
+  const aiBusyCount = doors.aiBusyId ? 1 : 0;
+  const stockCount = active.filter((p) => !p.isFinal).length - aiBusyCount;
   const decrease = () => {
-    const isExhausting =
-      !isFinal && !doors.aiBusyId && doors.limit > 1 && doors.limit - 1 <= doors.used && stockCount > 0;
+    const isExhausting = !isFinal && doors.limit > 1 && doors.limit - 1 === doors.used + aiBusyCount && stockCount > 0;
     if (isExhausting && !window.confirm(`回数を使い切り、ストック中の提案${stockCount}件は未処理になります。よろしいですか?`)) return;
     void act('doors:extend', { delta: -1 });
   };
