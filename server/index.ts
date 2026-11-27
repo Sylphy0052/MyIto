@@ -341,6 +341,9 @@ io.on('connection', (socket: GameSocket) => {
         .finally(() => {
           room.aiBusy = false;
           broadcast(room);
+        })
+        .catch((e: unknown) => {
+          console.error('AI topic chain failed:', e instanceof Error ? e.message : e);
         });
     }),
   );
