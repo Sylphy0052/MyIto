@@ -18,7 +18,10 @@ const lieVariants: Variants = {
 
 export function outcomeLabel(doors: DoorsView): string {
   if (doors.outcome === 'win') return '回答者の勝ち';
-  if (doors.outcome === 'lose') return doors.loseReason ? `回答者の負け (${doors.loseReason})` : '回答者の負け';
+  if (doors.outcome === 'lose') {
+    const suffix = doors.loseReason ? ` (${doors.loseReason})` : '';
+    return `回答者の負け${suffix}`;
+  }
   return `中止 (${doors.abortReason || '理由不明'})`;
 }
 

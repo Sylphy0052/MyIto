@@ -8,6 +8,12 @@ const WARN_MS = 60_000;
 const URGENT_MS = 10_000;
 const TIME_UP_NOTICE_MS = 8000;
 
+/** 残りに応じた色。残り1分で色を変え、残り10秒で脈打たせる */
+function toneOf(left: number): string {
+  if (left <= URGENT_MS) return 'is-urgent';
+  return left <= WARN_MS ? 'is-warn' : '';
+}
+
 function formatLeft(ms: number): string {
   const total = Math.ceil(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
@@ -21,6 +27,7 @@ export function TimeLeft({ doors }: { doors: DoorsView }) {
   const received = doors.timeLeftMs;
   const isPaused = doors.isTimePaused;
   // 受け取った値と、そのとき手元で測った時刻。新しい値が届いたその描画で基準を替える (古い基準で1回描かない)
+  // 止まっている間は受け取った値のまま。再開したときに基準の時刻を取り直すため、isPaused も依存に入れる
   const base = useMemo(() => ({ left: received, at: performance.now() }), [received, isPaused]);
   const [now, setNow] = useState(() => performance.now());
   const isTicking = received !== null && !isPaused;
@@ -31,9 +38,10 @@ export function TimeLeft({ doors }: { doors: DoorsView }) {
   }, [isTicking]);
 
   if (doors.timeLimitMin === 0) return null;
+  // 残りを数えない段階。質問の段階の時間切れ中だけ「時間切れ」と出し、それ以外 (答えの確定前・終了後) は何も出さない
   if (received === null) return doors.isTimeUp ? <span className="time-left is-up">時間切れ</span> : null;
   const left = isPaused ? received : Math.max(0, (base.left ?? received) - (Math.max(now, base.at) - base.at));
-  const tone = isPaused ? '' : left <= URGENT_MS ? 'is-urgent' : left <= WARN_MS ? 'is-warn' : '';
+  const tone = isPaused ? '' : toneOf(left);
   return (
     <span className={`time-left ${tone}`} role="timer" aria-label={`残り時間 ${formatLeft(left)}`}>
       残り <strong>{formatLeft(left)}</strong>

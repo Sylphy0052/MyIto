@@ -560,6 +560,8 @@ export class DoorsRound {
     if (!canExtend) throw new GameError('延長はホストかGMだけが操作できます');
     this.requirePlaying();
     if (delta === 1) {
+      // 締切を過ぎたのにタイマーが未発火の間の延長で、最終解答の時間切れを逃れさせない (承認と同じ。状態は変わっているので呼び出し側に配信させる)
+      if (this.deadlineAt > 0 && Date.now() >= this.deadlineAt && this.fireDeadline()) return;
       if (this.limit >= LIMITS.doorsMaxTotal) throw new GameError(`質問回数は${LIMITS.doorsMaxTotal}回までです`);
       this.limit += 1;
       // 時間切れの間は回数だけ増やす。質問へ戻るには時間の延長も要る
