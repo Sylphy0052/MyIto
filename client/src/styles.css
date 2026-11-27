@@ -1489,12 +1489,29 @@ button.ai-busy {
   object-fit: contain;
   object-position: bottom;
 }
+/* 合図が変わったときに頭の横へ出す漫符。操作は通す */
+.gm-portrait-mark {
+  position: absolute;
+  top: 4%;
+  left: 4%;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text, #333);
+  text-shadow: 0 0 4px #fff, 0 0 4px #fff;
+  pointer-events: none;
+}
 @media (max-width: 720px) {
   /* 狭い画面はバストアップで小さく出す */
   .gm-portrait {
     width: 96px;
     aspect-ratio: 1;
     opacity: 0.9;
+  }
+  .gm-portrait-mark {
+    top: -8px;
+    left: -18px;
+    font-size: 24px;
   }
   .gm-portrait img {
     object-fit: cover;
