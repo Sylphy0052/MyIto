@@ -139,8 +139,12 @@ export interface DoorsView {
   correctSeqBy: number;
   /** 制限時間 (分)。0 はなし */
   timeLimitMin: number;
-  /** 質問の段階の残りミリ秒。制限時間なし・答えの確定前・最終解答の段階・終了後は null。受け取った時点の値から手元で数え直す */
+  /** 合計の残りミリ秒 (質問の段階・最終解答の段階)。制限時間なし・答えの確定前・質問の段階の時間切れ中・終了後は null。受け取った時点の値から手元で数え直す */
   timeLeftMs: number | null;
+  /** 合計の時計が止まっているか (GMへ届いた提案の判定待ち)。timeLeftMs が null のときは false */
+  isTimePaused: boolean;
+  /** 回答者の負けの理由。時間切れなら「時間切れ」、通常の負けは空 */
+  loseReason: string;
   /** 時間切れで、いまも質問の段階が打ち切られているか */
   isTimeUp: boolean;
   /** このラウンドで一度でも時間切れになったか (結果画面用) */
