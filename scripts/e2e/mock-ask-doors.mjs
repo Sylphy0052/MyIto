@@ -65,4 +65,4 @@ http
       }, 600);
     });
   })
-  .listen(port, () => console.log(`mock ask (doors) on :${port}`));
+  .listen(port, '127.0.0.1', () => console.log(`mock ask (doors) on :${port}`));
