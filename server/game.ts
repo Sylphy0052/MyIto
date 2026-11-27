@@ -537,7 +537,10 @@ export class Room {
     return idx >= 0 && idx < this.revealed;
   }
 
-  /** viewer 向けの状態。本人のカードと公開済みのカード以外の数字は送らない */
+  /**
+   * viewer 向けの状態。本人のカードと公開済みのカード以外の数字は送らない。
+   * nextGmId は読むだけなので、配る前に refreshNextGm を呼んでおく (server/index.ts の broadcast が呼ぶ)
+   */
   viewFor(viewerId: string): RoomView {
     return {
       code: this.code,

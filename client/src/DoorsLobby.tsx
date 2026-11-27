@@ -102,9 +102,11 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
         {s.gmPick === 'random' && drawn && (
           <>
             <span>次のGM: {drawn} さん</span>
-            <button type="button" className="small" onClick={() => act('doors:reroll-gm')}>
-              引き直す
-            </button>
+            {connected.length >= 2 && (
+              <button type="button" className="small" onClick={() => act('doors:reroll-gm')}>
+                引き直す
+              </button>
+            )}
           </>
         )}
       </m.div>
