@@ -235,6 +235,13 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
   const finished = doors.proposals.filter((p) => !ACTIVE.has(p.status));
   const [isSoundOn, setSoundOn] = useSoundSetting();
   const canExtend = isHost || isGm;
+  // 回数を使い切る-1は、ストック中の提案 (GMへ届いた分を含む) を未処理にするので確かめる
+  const stockCount = active.filter((p) => !p.isFinal).length;
+  const decrease = () => {
+    const isExhausting = !isFinal && doors.limit - 1 <= doors.used && stockCount > 0;
+    if (isExhausting && !window.confirm(`回数を使い切り、ストック中の提案${stockCount}件は未処理になります。よろしいですか?`)) return;
+    void act('doors:extend', { delta: -1 });
+  };
 
   return (
     <div className="doors-play">
@@ -273,7 +280,7 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
         {canExtend && (
           <span className="extend-buttons">
             <span className="label">延長 (ホスト・GM)</span>
-            <button className="small" onClick={() => act('doors:extend', { delta: -1 })}>
+            <button className="small" onClick={decrease}>
               -1
             </button>
             <button className={`small ${isFinal ? 'primary' : ''}`} onClick={() => act('doors:extend', { delta: 1 })}>
@@ -351,9 +358,9 @@ function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: bool
         : undefined,
     [doors.proposals, key],
   );
-  // 質問の段階は残り回数を超えてストックできる。超えた分は回数を使い切った時点で未処理になる
   const activeCount = doors.proposals.filter((p) => ACTIVE.has(p.status) && !p.isFinal).length;
-  const isOverStock = !isFinal && activeCount >= doors.limit - doors.used;
+  // 質問の段階は残り回数を超えてストックできる。超えた分は回数を使い切った時点で未処理になる
+  const isOverStock = !isFinal && activeCount > doors.limit - doors.used;
   const blocker =
     isFinal && doors.proposals.some((p) => ACTIVE.has(p.status) && p.isFinal) ? '最終解答は1件ずつ出せます' : '';
 
@@ -397,7 +404,7 @@ function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: bool
         </p>
       )}
       {blocker && <p className="muted">{blocker}</p>}
-      {isOverStock && <p className="muted">残り回数を超えてストックしています。回数を使い切ると、残った提案は未処理で終わります</p>}
+      {isOverStock && <p className="muted">残り回数を超えてストックしています。回数を使い切ると、残った提案は未処理で終わります。</p>}
       <p className="muted hint-text">
         提案は、提案者以外の回答者全員がOKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
       </p>

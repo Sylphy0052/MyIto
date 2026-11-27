@@ -25,6 +25,8 @@ export const LIMITS = {
   doorsMaxLies: 3,
   /** 10の扉: ログに残す提案の数。提案のストックに上限は無く、これが総数の歯止めになる */
   doorsLog: 500,
+  /** 10の扉: ログ上限のうち最終解答のために残す数。質問の段階の提案はここまで使えない */
+  doorsFinalReserve: 20,
 } as const;
 
 export const DOORS_DEFAULT_QUESTIONS = 10;

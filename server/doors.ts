@@ -275,8 +275,10 @@ export class DoorsRound {
     const seat = this.requireRespondent(playerId, seats);
     if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
     if (!text) throw new GameError('内容を入力してください');
-    if (this.proposals.length >= LIMITS.doorsLog) throw new GameError('ログが上限に達しました');
     const isFinal = this.phase === 'doors-final';
+    // 質問の段階のストックでログを埋めても、最終解答の分は残す
+    const logCap = isFinal ? LIMITS.doorsLog : LIMITS.doorsLog - LIMITS.doorsFinalReserve;
+    if (this.proposals.length >= logCap) throw new GameError('ログが上限に達しました');
     if (isFinal) {
       if (this.proposals.some((p) => isActive(p) && p.isFinal)) throw new GameError('最終解答は1件ずつ出せます');
     } else {
