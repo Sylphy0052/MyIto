@@ -87,6 +87,8 @@ export class DoorsRound {
   used = 0;
   liesUsed = 0;
   proposals: Proposal[] = [];
+  /** 提案の通し番号。ログの古い記録を消しても番号が重ならないよう、配列の長さとは別に数える */
+  private nextSeq = 1;
   outcome: DoorsOutcome | null = null;
   abortReason = '';
   extendRequestSeq = 0;
@@ -317,18 +319,25 @@ export class DoorsRound {
     const isFinal = this.phase === 'doors-final';
     // 質問の段階のストックでログを埋めても、最終解答の分は残す
     const logCap = isFinal ? LIMITS.doorsLog : LIMITS.doorsLog - LIMITS.doorsFinalReserve;
-    if (this.proposals.length >= logCap) {
+    // 上限に届いたら、取り消し済みの一番古い記録を消して空きを作る。消せるものが無いときだけ断る。
+    // 消すのは他の検証を通った後 (断った提案で記録を失わない) なので、ここでは位置だけ控える
+    const evictIdx = this.proposals.length >= logCap ? this.proposals.findIndex((p) => p.status === 'cancelled') : -1;
+    if (this.proposals.length >= logCap && evictIdx < 0) {
       throw new GameError(isFinal ? 'ログが上限に達しました' : 'ログが上限に達しました。残りは最終解答の分です');
     }
     if (isFinal) {
       if (this.proposals.some((p) => isActive(p) && p.isFinal)) throw new GameError('最終解答は1件ずつ出せます');
     } else {
-      // 残り回数・1人あたりの件数を超えてストックできる。回数を使い切った時点で残りは settle が捨てる
+      // 残り回数を超えてストックできる (回数を使い切った時点で残りは settle が捨てる)。1人あたりは LIMITS.doorsStockPerPlayer (20) 件まで
+      if (this.proposals.filter((p) => p.authorId === playerId && isActive(p) && !p.isFinal).length >= LIMITS.doorsStockPerPlayer) {
+        throw new GameError(`ためておける提案は1人${LIMITS.doorsStockPerPlayer}件までです`);
+      }
       if (kind !== 'question' && kind !== 'guess') throw new GameError('質問か解答を選んでください');
     }
+    if (evictIdx >= 0) this.proposals.splice(evictIdx, 1);
     this.proposals.push({
       id: randomUUID(),
-      seq: this.proposals.length + 1,
+      seq: this.nextSeq++,
       authorId: playerId,
       authorName: seat.name,
       kind: isFinal ? 'guess' : (kind as ProposalKind),
