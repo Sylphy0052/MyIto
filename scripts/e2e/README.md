@@ -25,6 +25,8 @@ Chromeは`/usr/bin/google-chrome`を使う (`--no-sandbox`)。別の場所なら
 | `entry-shot.mjs <URL> <出力dir>` | ログイン画面のタイトルを320/360/390/1280px幅で撮る |
 | `mock-ask.mjs [ポート]` | ASK APIの簡易モック (お題を1.5秒後に返す)。`ASK_API_URL=http://localhost:47301`で向けて使う (httpはlocalhostだけ許可される)。このとき`ASK_API_KEY`と`ASK_PROJECT_ID`はダミー値 (例: `dummy`と`1`) でよい |
 
+モックは127.0.0.1で待ち受けるため、ホストで起動したサーバからしか届かない。コンテナ内のサーバからは届かない (compose.yamlにhost-gatewayの設定が無く、server/ai.tsがhttpをlocalhost/127.0.0.1/[::1]だけ許すため)。
+
 ## 注意
 
 - `npm start`はrepoのルートに`.env`があれば読む (プロセスにある環境変数が優先)。無ければ`ASK_API_KEY`と`ASK_PROJECT_ID`をプロセスの環境変数で渡す
