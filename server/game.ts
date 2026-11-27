@@ -312,7 +312,7 @@ export class Room {
     return (this.doorsSettings.turnLimitSec / 10) * DOORS_TURN_UNIT_MS;
   }
 
-  /** 質問の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
+  /** 質問・最終解答の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
   syncDoorsTimer(): void {
     this.stopDoorsTimer();
     const round = this.doors;
@@ -321,8 +321,8 @@ export class Room {
     if (deadline <= 0) return;
     this.doorsTimer = setTimeout(() => {
       this.doorsTimer = null;
-      // 別のラウンドに替わっていたり、質問の段階でなくなっていたりしたら何もしない
-      if (this.doors !== round || round.phase !== 'doors-asking') return;
+      // 別のラウンドに替わっていたり、質問・最終解答の段階でなくなっていたりしたら何もしない
+      if (this.doors !== round || (round.phase !== 'doors-asking' && round.phase !== 'doors-final')) return;
       if (!round.fireDeadline()) return this.syncDoorsTimer();
       this.phase = round.phase;
       this.syncDoorsTimer();

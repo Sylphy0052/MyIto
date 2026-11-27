@@ -95,8 +95,12 @@ export class DoorsRound {
   correctSeq = 0;
   /** 最後に訂正した提案の通し番号 */
   correctSeqBy = 0;
-  /** 質問の段階の締切 (epoch ms)。制限時間なし・答えの確定前は 0 */
+  /** 合計の締切 (epoch ms)。数えている間だけ入る。止まっている・数えない間・制限時間なしは 0 */
   deadlineAt = 0;
+  /** 合計の残り (ミリ秒)。止まっている間の残りを取っておく。null は制限時間なし */
+  private totalLeftMs: number | null = null;
+  /** 回答者の負けの理由 (時間切れなど)。空なら通常の負け */
+  loseReason = '';
   /** 時間切れで質問の段階を打ち切っている間 true。延長で下ろす */
   isTimeUp = false;
   /** 一度でも時間切れになったか */
@@ -183,8 +187,36 @@ export class DoorsRound {
 
   /** 答えが決まって質問の段階に入った時点から数える */
   private startClock(): void {
-    if (this.timeLimitMs > 0) this.deadlineAt = Date.now() + this.timeLimitMs;
+    this.deadlineAt = 0;
+    this.totalLeftMs = this.timeLimitMs > 0 ? this.timeLimitMs : null;
     this.resetTurn();
+  }
+
+  // ---- 合計の時計 ----
+
+  /** 合計の残り (ミリ秒)。制限時間なしは 0 を返すので、呼ぶ前に timeLimitMs を見る */
+  private totalLeft(): number {
+    return this.deadlineAt > 0 ? Math.max(0, this.deadlineAt - Date.now()) : (this.totalLeftMs ?? 0);
+  }
+
+  /** 質問の段階・最終解答の段階のどちらかで、合計の時計が数えるべき状態か。GMへ届いた提案がある間は止める */
+  private get isTotalCounting(): boolean {
+    if (this.timeLimitMs <= 0) return false;
+    if (this.phase === 'doors-asking') return !this.isTimeUp && !this.proposals.some((p) => p.status === 'sent' && !p.isFinal);
+    if (this.phase === 'doors-final') return !this.proposals.some((p) => p.status === 'sent');
+    return false;
+  }
+
+  /** 合計の時計の進行・停止を今の状態から決める。止める時は動いていた分を残りとして取っておく */
+  private syncTotal(): void {
+    if (this.timeLimitMs <= 0) return;
+    const now = Date.now();
+    if (this.isTotalCounting) {
+      if (this.deadlineAt === 0) this.deadlineAt = now + (this.totalLeftMs ?? 0);
+    } else if (this.deadlineAt > 0) {
+      this.totalLeftMs = Math.max(0, this.deadlineAt - now);
+      this.deadlineAt = 0;
+    }
   }
 
   // ---- 手番の時計 ----
@@ -200,6 +232,7 @@ export class DoorsRound {
    * 質問の段階で、時間切れでなく、GMへ届いている質問の段階の提案が無い間だけ進む。届いている間は残りを取っておく
    */
   syncTurn(): void {
+    this.syncTotal();
     if (this.turnLimitMs <= 0) return;
     const now = Date.now();
     const isCounting =
@@ -225,18 +258,24 @@ export class DoorsRound {
 
   /** 部屋のタイマーが待つ次の締切 (epoch ms)。無ければ 0。ラウンド全体の締切と手番の締切の早い方 */
   nextDeadline(): number {
+    if (this.phase === 'doors-final') return this.deadlineAt;
     if (this.phase !== 'doors-asking' || this.isTimeUp) return 0;
     const ds = [this.deadlineAt, this.turnDeadlineAt].filter((d) => d > 0);
     return ds.length > 0 ? Math.min(...ds) : 0;
   }
 
   /**
-   * 締切が過ぎていれば処理する。両方過ぎていればラウンド全体の時間切れだけを処理する。
+   * 締切が過ぎていれば処理する。質問の段階で両方過ぎていればラウンド全体の時間切れだけを処理する。最終解答の段階の時間切れは負けで終わる。
    * 処理したら true
    */
   fireDeadline(): boolean {
-    if (this.phase !== 'doors-asking' || this.isTimeUp) return false;
     const now = Date.now();
+    if (this.phase === 'doors-final') {
+      if (this.deadlineAt === 0 || now < this.deadlineAt) return false;
+      this.expireFinal();
+      return true;
+    }
+    if (this.phase !== 'doors-asking' || this.isTimeUp) return false;
     if (this.deadlineAt > 0 && now >= this.deadlineAt) {
       this.expire();
       return true;
@@ -315,7 +354,9 @@ export class DoorsRound {
     if (this.isTimeUp && this.phase === 'doors-asking') throw new GameError('時間切れです');
     // 手番の締切が過ぎたのにタイマーが未発火の間の承認で、時間切れを逃れさせない。
     // 時間切れを処理したら、この承認は捨てる (状態は変わっているので、エラーにせず呼び出し側に同期・配信させる)
-    if (this.turnDeadlineAt > 0 && Date.now() >= this.turnDeadlineAt && this.fireDeadline()) return;
+    const nowMs = Date.now();
+    const isOverdue = (this.turnDeadlineAt > 0 && nowMs >= this.turnDeadlineAt) || (this.deadlineAt > 0 && nowMs >= this.deadlineAt);
+    if (isOverdue && this.fireDeadline()) return;
     const p = this.find(id);
     if (p.status !== 'proposed') throw new GameError('この提案は承認待ちではありません');
     if (p.authorId === playerId) throw new GameError('自分の提案は承認できません');
@@ -543,7 +584,8 @@ export class DoorsRound {
     this.phase = 'doors-asking';
     this.resetTurn();
     // 戻した時点で締切を過ぎていれば、その場で時間切れにする
-    if (this.deadlineAt > 0 && Date.now() >= this.deadlineAt) this.expire();
+    this.syncTotal();
+    if (this.timeLimitMs > 0 && this.totalLeft() <= 0) this.expire();
   }
 
   /** 時間を1分延ばす。時間切れのあとなら時間切れを解き、回数が残っていれば質問の段階へ戻す */
@@ -551,20 +593,19 @@ export class DoorsRound {
     if (!canExtend) throw new GameError('延長はホストかGMだけが操作できます');
     this.requirePlaying();
     if (this.timeLimitMs <= 0) throw new GameError('制限時間がありません');
-    const now = Date.now();
-    if (this.isTimeUp) {
-      this.isTimeUp = false;
-      this.deadlineAt = now + DOORS_MINUTE_MS;
-      this.resetTurn();
-      if (this.phase === 'doors-final' && this.used < this.limit) this.backToAsking();
-      this.syncTurn();
-      return;
-    }
-    const next = Math.max(this.deadlineAt, this.phase === 'doors-final' ? now : 0) + DOORS_MINUTE_MS;
-    if (next - now > LIMITS.doorsMaxTimeLeftMin * DOORS_MINUTE_MS) {
+    const next = this.totalLeft() + DOORS_MINUTE_MS;
+    if (next > LIMITS.doorsMaxTimeLeftMin * DOORS_MINUTE_MS) {
       throw new GameError(`残り時間は${LIMITS.doorsMaxTimeLeftMin}分までです`);
     }
-    this.deadlineAt = next;
+    // 数えている間は締切を、止まっている間は取っておいた残りを延ばす
+    if (this.deadlineAt > 0) this.deadlineAt += DOORS_MINUTE_MS;
+    else this.totalLeftMs = next;
+    if (this.isTimeUp) {
+      this.isTimeUp = false;
+      this.resetTurn();
+      if (this.phase === 'doors-final' && this.used < this.limit) this.backToAsking();
+    }
+    this.syncTurn();
   }
 
   /** 時間切れ。質問の段階のときだけ処理する。承認待ちを取り消し、届いている提案が片付けば最終解答の段階へ進む */
@@ -572,12 +613,26 @@ export class DoorsRound {
     if (this.phase !== 'doors-asking' || this.isTimeUp) return;
     this.isTimeUp = true;
     this.wasTimeUp = true;
+    this.deadlineAt = 0;
+    this.totalLeftMs = 0;
+    this.cancelProposed();
+    this.settle();
+  }
+
+  /** 最終解答の段階の時間切れ。承認待ちを取り消し、回答者の負けで終わる */
+  private expireFinal(): void {
+    this.wasTimeUp = true;
+    this.cancelProposed();
+    this.loseReason = '時間切れ';
+    this.finish('lose');
+  }
+
+  private cancelProposed(): void {
     for (const p of this.proposals) {
       if (p.status !== 'proposed') continue;
       p.status = 'cancelled';
       p.cancelledByName = '(時間切れ)';
     }
-    this.settle();
   }
 
   // ---- 進行 ----
@@ -591,7 +646,11 @@ export class DoorsRound {
       for (const p of this.proposals) if (isActive(p) && !p.isFinal) p.status = 'discarded';
     }
     if (this.phase === 'doors-asking' && (this.used >= this.limit || this.isTimeUp) && this.activeCount() === 0) {
+      // 最終解答を考える時間として、残りが60秒に満たなければ60秒にする
+      this.syncTotal();
       this.phase = 'doors-final';
+      if (this.timeLimitMs > 0) this.totalLeftMs = Math.max(this.totalLeft(), DOORS_MINUTE_MS);
+      this.deadlineAt = 0;
     }
     this.syncTurn();
   }
@@ -636,6 +695,7 @@ export class DoorsRound {
     this.outcome = outcome;
     this.phase = 'doors-result';
     this.turnDeadlineAt = 0;
+    this.deadlineAt = 0;
   }
 
   // ---- 表示 ----
@@ -685,7 +745,9 @@ export class DoorsRound {
       correctSeq: this.correctSeq,
       correctSeqBy: this.correctSeqBy,
       timeLimitMin: Math.round(this.timeLimitMs / DOORS_MINUTE_MS),
-      timeLeftMs: this.deadlineAt > 0 && this.phase === 'doors-asking' ? Math.max(0, this.deadlineAt - Date.now()) : null,
+      timeLeftMs: this.isTotalShown ? this.totalLeft() : null,
+      isTimePaused: this.isTotalShown && this.deadlineAt === 0,
+      loseReason: this.loseReason,
       isTimeUp: this.isTimeUp,
       wasTimeUp: this.wasTimeUp,
       turnLimitSec: Math.round(this.turnLimitMs / DOORS_TURN_UNIT_MS) * 10,
@@ -693,6 +755,11 @@ export class DoorsRound {
       isTurnPaused: this.isTurnShown && this.turnDeadlineAt === 0,
       turnTimeoutCount: this.turnTimeoutCount,
     };
+  }
+
+  /** 合計の残りを見せる段階か。質問の段階 (時間切れ中を除く) と最終解答の段階。制限なしは false */
+  private get isTotalShown(): boolean {
+    return this.timeLimitMs > 0 && (this.phase === 'doors-final' || (this.phase === 'doors-asking' && !this.isTimeUp));
   }
 
   private turnLeft(): number {
