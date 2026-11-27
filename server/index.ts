@@ -8,7 +8,7 @@ import { Server, type Socket } from 'socket.io';
 import { LIMITS, type Ack, type DoorsAiModel } from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
-import { acquireAiSlot, generateTopics, sanitizeGenre } from './ai';
+import { AiLimitError, acquireAiSlot, generateTopics, releaseRoomAiSlots, sanitizeGenre } from './ai';
 import type { DoorsRound } from './doors';
 import { answerQuestion, generateSecretAnswer, judgeGuess, type HistoryItem, type Judgement, type SecretAnswer } from './doorsAi';
 import { normalizeText } from '../shared/normalize';
@@ -17,6 +17,11 @@ const PORT = Number(process.env.PORT ?? 47213);
 const REVEAL_INTERVAL_MS = 1_200;
 const HOST_GRACE_MS = 30_000;
 const ROOM_IDLE_MS = 60 * 60_000;
+// 一度もロビーを出ずに無人になったルームは早く片付ける (作成の連打で枠を埋められないようにする)
+const UNPLAYED_ROOM_IDLE_MS = 3 * 60_000;
+const SWEEP_INTERVAL_MS = 60_000;
+// ソケットごとのルーム作成の間隔。1人が数回作り直す使い方は止めず、連打だけを断る
+const CREATE_INTERVAL_MS = 30_000;
 const MAX_ROOMS = 200;
 const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
@@ -24,6 +29,8 @@ const DOORS_BURST_WINDOW_MS = 3_000;
 const DOORS_BURST_MAX = 6;
 
 const rooms = new Map<string, Room>();
+/** 一度でもロビーを出たルームのコード。ルームを消すときに一緒に消す */
+const playedRooms = new Set<string>();
 
 const app = express();
 const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'client');
@@ -32,7 +39,7 @@ app.use((_req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
+    "default-src 'self'; connect-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
   );
   next();
 });
@@ -62,11 +69,13 @@ interface SocketData {
   windowCount?: number;
   doorsWindowStart?: number;
   doorsWindowCount?: number;
+  lastCreateAt?: number;
 }
 type GameSocket = Socket<any, any, any, SocketData>;
 
 function broadcast(room: Room): void {
   room.lastActiveAt = Date.now();
+  if (room.phase !== 'lobby') playedRooms.add(room.code);
   // 状態が変わるたびに、AI GMが次にすることがあるかを見る。処理中の印は配信の前に付ける
   driveAiGm(room);
   // 10の扉でGMがランダムなら、ロビーで次のGMを引いておいてから配る (切断・退出・設定変更で決め直す)
@@ -97,14 +106,18 @@ function driveAiGm(room: Room): void {
   if (round.phase === 'doors-setup') {
     if (round.answer) return;
     round.aiBusy = true;
-    generateSecretAnswer(room.doorsSettings.aiModel, room.topic, room.aiAnswers)
+    generateSecretAnswer(room.code, room.doorsSettings.aiModel, room.topic, room.aiAnswers)
       .then(({ answer, memo }) => {
         if (!isCurrentRound(room, round) || round.phase !== 'doors-setup') return round.endAiAnswer();
         room.setAiAnswer(round, answer, memo);
       })
       .catch((e: unknown) => {
         console.error('AI doors answer failed:', aiErrorText(e));
+        const wasSetup = room.doors === round && round.phase === 'doors-setup';
         room.failAiAnswer(round);
+        if (wasSetup && e instanceof AiLimitError) {
+          room.notice = 'AIの上限に達したので、ロビーに戻りました。少し待ってからもう一度開始してください';
+        }
       })
       .finally(() => {
         if (rooms.get(room.code) === room) broadcast(room);
@@ -118,17 +131,22 @@ function driveAiGm(room: Room): void {
   const secret = { answer: round.answer, memo: round.memo };
   const job =
     kind === 'question'
-      ? answerQuestion(room.doorsSettings.aiModel, secret, aiHistory(round), text).then((reply) => {
+      ? answerQuestion(room.code, room.doorsSettings.aiModel, secret, aiHistory(round), text).then((reply) => {
           if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiQuestion(id, reply);
         })
-      : judge(room.doorsSettings.aiModel, secret, text).then(({ verdict, reason }) => {
+      : judge(room.code, room.doorsSettings.aiModel, secret, text).then(({ verdict, reason }) => {
           if (isCurrentRound(room, round) && round.isAwaitingAi(id)) round.applyAiGuess(id, verdict, reason);
         });
   job
     .catch((e: unknown) => {
       console.error('AI doors reply failed:', aiErrorText(e));
       if (isCurrentRound(room, round) && round.isAwaitingAi(id)) {
-        round.failAi(id, 'AIの応答に失敗しました。ホストは再試行できます');
+        round.failAi(
+          id,
+          e instanceof AiLimitError
+            ? 'AIの上限に達しました。少し待ってからホストが再試行してください'
+            : 'AIの応答に失敗しました。ホストは再試行できます',
+        );
       }
     })
     .finally(() => {
@@ -150,13 +168,13 @@ function aiHistory(round: DoorsRound): HistoryItem[] {
 }
 
 /** 表記の正規化で答えと一致すれば、AIに聞かずに正解にする */
-async function judge(model: DoorsAiModel, secret: SecretAnswer, guess: string): Promise<Judgement> {
+async function judge(roomCode: string, model: DoorsAiModel, secret: SecretAnswer, guess: string): Promise<Judgement> {
   const key = normalizeText(guess);
   // 正規化で空になる (記号だけの) 解答・答えは完全一致にせず、AIの判定に回す
   if (key !== '' && key === normalizeText(secret.answer)) {
     return { verdict: 'correct', reason: '表記をそろえると答えと一致しました' };
   }
-  return judgeGuess(model, secret, guess);
+  return judgeGuess(roomCode, model, secret, guess);
 }
 
 function errorMessage(e: unknown): string {
@@ -262,6 +280,10 @@ io.on('connection', (socket: GameSocket) => {
     if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
+    const now = Date.now();
+    if (socket.data.lastCreateAt !== undefined && now - socket.data.lastCreateAt < CREATE_INTERVAL_MS) {
+      return ack({ ok: false, error: 'ルームの作成は30秒に1回までです。少し待ってください' });
+    }
     if (rooms.size >= MAX_ROOMS) return ack({ ok: false, error: 'ルーム数が上限です。既存のルームに入ってください' });
     let code: string;
     try {
@@ -269,6 +291,7 @@ io.on('connection', (socket: GameSocket) => {
     } catch (e) {
       return ack({ ok: false, error: errorMessage(e) });
     }
+    socket.data.lastCreateAt = now;
     const room = new Room(code);
     room.onDoorsTimeUp = () => broadcast(room);
     rooms.set(room.code, room);
@@ -316,7 +339,7 @@ io.on('connection', (socket: GameSocket) => {
       if (pid !== room.hostId) throw new GameError('ホストだけが操作できます');
       if (room.phase !== 'lobby') throw new GameError('お題はロビーでだけ変更できます');
       if (room.aiBusy) throw new GameError('AIがお題を考え中です');
-      const limited = acquireAiSlot();
+      const limited = acquireAiSlot('topic', room.code);
       if (limited) throw new GameError(limited);
       const { mode } = room;
       const label = mode === 'doors' ? 'テーマ' : 'お題';
@@ -423,13 +446,16 @@ io.on('connection', (socket: GameSocket) => {
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (!room.hasConnected() && now - room.lastActiveAt > ROOM_IDLE_MS) {
+    const idleMs = playedRooms.has(code) ? ROOM_IDLE_MS : UNPLAYED_ROOM_IDLE_MS;
+    if (!room.hasConnected() && now - room.lastActiveAt > idleMs) {
       room.stopReveal();
       room.stopDoorsTimer();
       rooms.delete(code);
+      playedRooms.delete(code);
+      releaseRoomAiSlots(code);
     }
   }
-}, 5 * 60_000);
+}, SWEEP_INTERVAL_MS);
 
 httpServer.listen(PORT, () => {
   console.log(`ito server listening on :${PORT}`);

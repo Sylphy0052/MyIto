@@ -1,6 +1,6 @@
 import { LIMITS, QUESTION_REPLIES, type DoorsAiModel, type GuessReply, type QuestionReply } from '../shared/types';
 import { normalizeText } from '../shared/normalize';
-import { acquireAiSlot, askChat, looksUnsafe } from './ai';
+import { AiLimitError, acquireAiSlot, askChat, looksUnsafe } from './ai';
 
 /** 事実メモの上限。200字程度を頼み、はみ出しても切って使う */
 const MAX_MEMO_CHARS = 400;
@@ -93,9 +93,9 @@ function text(value: unknown, max: number): string {
   return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 }
 
-async function call(model: DoorsAiModel, template: string, data: unknown): Promise<string> {
-  const limited = acquireAiSlot('doors');
-  if (limited) throw new Error(limited);
+async function call(roomCode: string, model: DoorsAiModel, template: string, data: unknown): Promise<string> {
+  const limited = acquireAiSlot('doors', roomCode);
+  if (limited) throw new AiLimitError(limited);
   const { message } = await askChat(template, JSON.stringify(data), model);
   return message;
 }
@@ -112,10 +112,10 @@ function validAnswer(raw: unknown): string | null {
 }
 
 /** テーマから答えと事実メモを決める。出力が使えなければ1回だけやり直し、それでも駄目なら Error を投げる */
-export async function generateSecretAnswer(model: DoorsAiModel, theme: string, avoid: readonly string[]): Promise<SecretAnswer> {
+export async function generateSecretAnswer(roomCode: string, model: DoorsAiModel, theme: string, avoid: readonly string[]): Promise<SecretAnswer> {
   let lastProblem = '';
   for (let i = 0; i < ANSWER_ATTEMPTS; i++) {
-    const obj = parseObject(await call(model, ANSWER_TEMPLATE, { theme, avoid }));
+    const obj = parseObject(await call(roomCode, model, ANSWER_TEMPLATE, { theme, avoid }));
     const answer = validAnswer(obj?.answer);
     // avoid (過去の答え) と同じ答えは使えない答えとして、やり直しに乗せる
     const key = answer === null ? '' : normalizeText(answer);
@@ -130,19 +130,20 @@ export async function generateSecretAnswer(model: DoorsAiModel, theme: string, a
 
 /** 質問に5段階で正直に答える。JSON が読めない・5段階に当たらないときは unknown */
 export async function answerQuestion(
+  roomCode: string,
   model: DoorsAiModel,
   secret: SecretAnswer,
   history: readonly HistoryItem[],
   question: string,
 ): Promise<QuestionReply> {
-  const obj = parseObject(await call(model, questionTemplate(secret), { question, history }));
+  const obj = parseObject(await call(roomCode, model, questionTemplate(secret), { question, history }));
   const rating = obj?.rating;
   return QUESTION_REPLIES.includes(rating as never) ? (rating as QuestionReply) : 'unknown';
 }
 
 /** 解答を判定する。出力が3つのどれでもなければ wrong */
-export async function judgeGuess(model: DoorsAiModel, secret: SecretAnswer, guess: string): Promise<Judgement> {
-  const obj = parseObject(await call(model, guessTemplate(secret), { guess }));
+export async function judgeGuess(roomCode: string, model: DoorsAiModel, secret: SecretAnswer, guess: string): Promise<Judgement> {
+  const obj = parseObject(await call(roomCode, model, guessTemplate(secret), { guess }));
   const verdict = obj?.verdict;
   if (verdict !== 'correct' && verdict !== 'close' && verdict !== 'wrong') {
     return { verdict: 'wrong', reason: '判定を読み取れなかったため不正解として扱いました' };

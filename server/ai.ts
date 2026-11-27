@@ -9,6 +9,8 @@ const GLOBAL_WINDOW_MS = 60_000;
  * お題生成と同じ枠では、2ルームが同時に遊ぶとお題生成ごと止まるため、枠を分ける
  */
 const MAX_CALLS: Record<AiBucket, number> = { topic: 30, doors: 60 };
+/** 1分あたりの呼出の上限 (ルーム単位)。全体枠の中で、1つのルームが使い切れる量を抑える */
+const MAX_ROOM_CALLS: Record<AiBucket, number> = { topic: 5, doors: 20 };
 const MAX_OUTPUT_CHARS = 2_000;
 // 改行の来ない1行をため続けないための上限
 const MAX_LINE_CHARS = 64_000;
@@ -16,6 +18,10 @@ const MAX_ERROR_DETAIL_CHARS = 200;
 
 export type AiBucket = 'topic' | 'doors';
 const calls: Record<AiBucket, number[]> = { topic: [], doors: [] };
+const roomCalls = new Map<string, number[]>();
+
+/** 上限で断られたことを示すエラー。呼出側は文言を書き分けるためにこれで見分ける */
+export class AiLimitError extends Error {}
 
 // ASK API。URL・キー・projectId のどれかが無ければ AI 生成は使わない。URL に既定値は持たない。
 // compose は未設定の変数も空文字で渡すので、既定値のある変数は ?? ではなく || で当てる
@@ -38,17 +44,32 @@ export function sanitizeGenre(raw: unknown): string {
     .slice(0, LIMITS.genre);
 }
 
-/** 制限に掛かるなら理由を返す。掛からなければ呼出を記録して null を返す */
-export function acquireAiSlot(bucket: AiBucket = 'topic', now = Date.now()): string | null {
+/**
+ * 制限に掛かるなら理由を返す。掛からなければ呼出を記録して null を返す。
+ * 全体枠とルーム枠を同時に判定し、片方で断ったときはどちらも消費しない
+ */
+export function acquireAiSlot(bucket: AiBucket, roomCode: string, now = Date.now()): string | null {
   const recent = calls[bucket].filter((t) => now - t < GLOBAL_WINDOW_MS);
+  calls[bucket] = recent;
+  const label = bucket === 'doors' ? '10の扉のAI' : 'AI生成';
   const max = MAX_CALLS[bucket];
-  if (recent.length >= max) {
-    calls[bucket] = recent;
-    const label = bucket === 'doors' ? '10の扉のAI' : 'AI生成';
-    return `${label}の全体の上限 (1分に${max}回) に達しました`;
+  if (recent.length >= max) return `${label}の全体の上限 (1分に${max}回) に達しました`;
+
+  const key = `${bucket}:${roomCode}`;
+  const roomRecent = (roomCalls.get(key) ?? []).filter((t) => now - t < GLOBAL_WINDOW_MS);
+  const roomMax = MAX_ROOM_CALLS[bucket];
+  if (roomRecent.length >= roomMax) {
+    roomCalls.set(key, roomRecent);
+    return `このルームの${label}の上限 (1分に${roomMax}回) に達しました。少し待ってください`;
   }
   calls[bucket] = [...recent, now];
+  roomCalls.set(key, [...roomRecent, now]);
   return null;
+}
+
+/** ルームを消すときに、そのルームの枠の記録を消す (ルームのコードは使い回されるため) */
+export function releaseRoomAiSlots(roomCode: string): void {
+  for (const bucket of ['topic', 'doors'] as const) roomCalls.delete(`${bucket}:${roomCode}`);
 }
 
 // トークンやキーらしき文字列。Anthropic 形式 (sk-ant-) と、ASK のキーなど形式を問わず拾えるよう長い英数字の連なり
