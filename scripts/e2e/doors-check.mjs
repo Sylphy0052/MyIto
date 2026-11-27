@@ -1,4 +1,4 @@
-// 10の扉 (GM=プレイヤー指名) を3クライアントで通す。答えの漏えい、承認、回数、結果画面を見て、各画面を撮る
+// 10の扉を3クライアントで通す。GMランダムの次のGM表示と引き直し、GM指名での答えの漏えい、承認、回数、結果画面を見て、各画面を撮る
 // 使い方: node doors-check.mjs <base URL> <screenshot dir> [reduced]
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -52,10 +52,27 @@ await enter(b, code);
 await a.getByText('ホストが開始するのを待っています').waitFor();
 await b.getByText('ホストが開始するのを待っています').waitFor();
 
-// ロビー: 10の扉を選び、GMを指名する
+const gmSelect = host.locator('.field-row', { hasText: 'GMの決め方' }).locator('select').first();
+// ロビー: GMランダムで次のGMが全員に出て、ホストの引き直しで変わる (#56)
 await host.getByRole('radio', { name: '10の扉' }).click();
-await host.getByLabel('GMの決め方').or(host.locator('select').first()).first().selectOption('named');
-await host.locator('select').nth(1).selectOption({ label: 'GMホスト' });
+await gmSelect.selectOption('random');
+const nextGmOf = async (page) => {
+  const t = await page.getByText(/(?:次のGM: |次は ).+? さん/).first().textContent({ timeout: 5000 }).catch(() => '');
+  return (t ?? '').match(/(?:次のGM: |次は )(.+?) さん/)?.[1] ?? '';
+};
+const drawnByHost = await nextGmOf(host);
+check('GMランダムのとき次のGMがホストに出る', drawnByHost !== '');
+check('次のGMがゲストにも同じ名前で出る', drawnByHost !== '' && (await nextGmOf(a)) === drawnByHost);
+await host.getByRole('button', { name: '引き直す' }).click();
+await a.getByText(new RegExp(`次は (?!${drawnByHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} さん).+? さん`)).first().waitFor({ timeout: 5000 }).then(
+  () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', true),
+  () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', false),
+);
+await shot(a, '01a-guest-next-gm');
+
+// ロビー: GMを指名する
+await gmSelect.selectOption('named');
+await host.locator('.field-row', { hasText: 'GMの決め方' }).locator('select').nth(1).selectOption({ label: 'GMホスト' });
 await host.waitForTimeout(500);
 await shot(host, '01-host-lobby');
 await shot(a, '02-guest-lobby');

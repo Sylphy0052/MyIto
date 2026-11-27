@@ -595,6 +595,8 @@ export class DoorsRound {
     if (!canExtend) throw new GameError('延長はホストかGMだけが操作できます');
     this.requirePlaying();
     if (this.timeLimitMs <= 0) throw new GameError('制限時間がありません');
+    // 最終解答の締切を過ぎたのにタイマーが未発火の間の延長で、時間切れの負けを逃れさせない (extend(+1)と同じ)
+    if (this.phase === 'doors-final' && this.deadlineAt > 0 && Date.now() >= this.deadlineAt && this.fireDeadline()) return;
     const next = this.totalLeft() + DOORS_MINUTE_MS;
     if (next > LIMITS.doorsMaxTimeLeftMin * DOORS_MINUTE_MS) {
       throw new GameError(`残り時間は${LIMITS.doorsMaxTimeLeftMin}分までです`);
