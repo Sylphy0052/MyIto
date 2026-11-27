@@ -334,6 +334,18 @@ io.on('connection', (socket: GameSocket) => {
     withRoom(socket, (room, pid, p) => room.setTopic(pid, cleanText(p.topic, LIMITS.topic), 'custom')),
   );
   socket.on(
+    'topic:suggest',
+    withRoom(socket, (room, pid, p) => room.suggestTopic(pid, cleanText(p.topic, LIMITS.topic))),
+  );
+  socket.on(
+    'topic:suggest-withdraw',
+    withRoom(socket, (room, pid, p) => room.withdrawSuggestion(pid, p.id)),
+  );
+  socket.on(
+    'topic:dismiss',
+    withRoom(socket, (room, pid, p) => room.dismissSuggestion(pid, p.id)),
+  );
+  socket.on(
     'topic:ai',
     withRoom(socket, (room, pid, p) => {
       if (pid !== room.hostId) throw new GameError('ホストだけが操作できます');
