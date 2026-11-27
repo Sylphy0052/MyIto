@@ -4,6 +4,8 @@ description: worktreeで作業中に相対パスでfinalize.pyを流すと、mai
 updated: 2026-11-27
 ---
 
+# worktree作業中に相対パスでfinalize.pyを流す
+
 ## 何が起きたか
 
 #61でworktree (`.claude/worktrees/feat-gm-expression`) の立ち絵を差し替える途中、シェルのcwdがmain working treeのまま `uv run ... python3 scripts/assets/finalize.py --in <dir> --only portrait` を実行した。main側の `finalize.py` (7表情版) が走り、`smug.webp` が出ないまま、main側の `client/public/gm/` の6枚を書き換えた。

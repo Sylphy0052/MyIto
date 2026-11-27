@@ -1,7 +1,7 @@
 ---
 name: e2e-ai-mode-env
 description: npm startは環境変数のファイルを読まないので、検証サーバーでAIモードが出ない。ASK_*をプロセスに渡す
-updated: 2026-11-20
+updated: 2026-11-27
 ---
 
 # 検証サーバーでAIモードが使えない
@@ -19,4 +19,4 @@ updated: 2026-11-20
 
 - AIモードを試すときは、`ASK_API_KEY`と`ASK_PROJECT_ID`をプロセスの環境変数で渡して起動する (値は共有しない・書き残さない)
 - AIを使わず画面だけ確かめるなら、`scripts/e2e/mock-ask.mjs`のモックを使う。`ASK_API_URL=http://localhost:47301`で向け、`ASK_API_KEY`と`ASK_PROJECT_ID`はダミー値 (例: `dummy`と`1`) でよい
-- 既定モデルは`gpt-6-luna-thinking` (`DOORS_MODEL`で変更)。`gpt-6.1-luna`系は400になる ([ASK APIのmodelVariant](ask-model-variant.md))
+- モデルの既定値と`DOORS_MODEL`は[10の扉のAI GMのモデル](doors-model-variant.md)を見る
