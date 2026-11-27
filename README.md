@@ -73,13 +73,13 @@ npm run build && npm start   # http://localhost:47213
 docker compose up -d --build
 ```
 
-AIお題 (10の扉ではテーマ) と10の扉のAI GMは、社内のASK API (NoteDockと同じ窓口) を使う。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_KEY`か`ASK_PROJECT_ID`が無ければ、AI生成は内蔵リストのお題に切り替わり、10の扉のAI GMは選べなくなる。
+AIお題 (10の扉ではテーマ) と10の扉のAI GMは、ASK APIを使う。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_URL`・`ASK_API_KEY`・`ASK_PROJECT_ID`のどれかが無ければ、AI生成は内蔵リストのお題に切り替わり、10の扉のAI GMは選べなくなる。
 
 ```sh
+ASK_API_URL=<ASK APIのURL (httpsのみ。httpはlocalhostだけ通る)>
 ASK_API_KEY=<APIキー>
 ASK_PROJECT_ID=<プロジェクトID>
 # 省略時の値
-# ASK_API_URL=https://langchaindemo.heroz.jp
 # ASK_MODEL=claude-55-sonnet-thinking
 # 10の扉のAI GMの既定のモデル (gpt-6-luna-thinking か gpt-6-luna。ロビーでホストが選び直せる)
 # DOORS_MODEL=gpt-6-luna-thinking

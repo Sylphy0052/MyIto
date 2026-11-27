@@ -34,7 +34,7 @@ ComfyUIはGPUサーバのdocker内で1台動かし、同じコンテナ内で生
 
 GPUサーバ上のパスは、作業dirと同じくサーバから見えるNAS上に置きます。
 
-`cs.py` は `compute-server` skillのスクリプトです（`~/.claude/skills/compute-server/scripts/cs.py`）。以下ではこれを `cs.py` と書きます。
+`cs.py` は計算機サーバを選んでジョブを流す手元のスクリプトです。
 
 ```bash
 # 1. サーバを選んで作業dirを作る（GPUあり）

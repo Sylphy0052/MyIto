@@ -17,15 +17,15 @@ const MAX_ERROR_DETAIL_CHARS = 200;
 export type AiBucket = 'topic' | 'doors';
 const calls: Record<AiBucket, number[]> = { topic: [], doors: [] };
 
-// 社内の ASK API (NoteDock と同じ窓口)。キーと projectId が無ければ AI 生成は使わない。
-// compose は未設定の変数も空文字で渡すので、既定値は ?? ではなく || で当てる
-const ASK_API_URL = (process.env.ASK_API_URL || 'https://langchaindemo.heroz.jp').replace(/\/+$/, '');
+// ASK API。URL・キー・projectId のどれかが無ければ AI 生成は使わない。URL に既定値は持たない。
+// compose は未設定の変数も空文字で渡すので、既定値のある変数は ?? ではなく || で当てる
+const ASK_API_URL = (process.env.ASK_API_URL ?? '').trim().replace(/\/+$/, '');
 const ASK_API_KEY = (process.env.ASK_API_KEY ?? '').trim();
 const ASK_PROJECT_ID = Number(process.env.ASK_PROJECT_ID || '');
 // Sonnet 系は thinking 版だけが通る (非 thinking 版は ASK 側のプロンプトキャッシュの不具合で失敗する)
 const ASK_MODEL = process.env.ASK_MODEL || 'claude-55-sonnet-thinking';
 // 10の扉のAI GM用。実機のASKで確かめた結果、gpt-6.1-luna / gpt-61-luna (各 -thinking 付きも) は400、
-// gpt-6-luna と gpt-6-luna-thinking は200で答えが返った (docs/knowledge/ask-model-variant.md)。
+// gpt-6-luna と gpt-6-luna-thinking は200で答えが返った (docs/knowledge/doors-model-variant.md)。
 // 質問の意味の読み取りと解答の判定に推論が効き、応答も約1.7秒で30秒のタイムアウトに収まるので thinking 版を既定にする
 // 環境変数 DOORS_MODEL は、候補 (DOORS_AI_MODELS) に含まれるときだけ既定値になる
 export const DOORS_MODEL: DoorsAiModel = DOORS_AI_MODELS.find((m) => m === process.env.DOORS_MODEL) ?? 'gpt-6-luna-thinking';
@@ -84,7 +84,9 @@ function askConfigProblems(): string[] {
   return [
     ASK_API_KEY.length === 0 && 'ASK_API_KEY is empty',
     !(Number.isInteger(ASK_PROJECT_ID) && ASK_PROJECT_ID > 0) && 'ASK_PROJECT_ID must be a positive integer',
-    !isSafeAskUrl(ASK_API_URL) && 'ASK_API_URL must be https (http only for localhost)',
+    ASK_API_URL.length === 0
+      ? 'ASK_API_URL is empty'
+      : !isSafeAskUrl(ASK_API_URL) && 'ASK_API_URL must be https (http only for localhost)',
   ].filter((p): p is string => typeof p === 'string');
 }
 
@@ -148,7 +150,7 @@ export interface Answer {
 
 /**
  * ASK API の応答 (1行1JSONのストリーム) から本文を組み立てる。
- * ASK は終端を示すイベントを送らない (NoteDock も close まで読む) ので、close までに届いた分を本文とする
+ * ASK は終端を示すイベントを送らないので、close までに届いた分を本文とする
  */
 async function readAnswer(body: ReadableStream<Uint8Array>): Promise<Answer> {
   const reader = body.getReader();
