@@ -68,6 +68,8 @@ cs.py fetch myito-gm assets/out ./out
 cs.py cleanup myito-gm --kill
 ```
 
+一部の表情だけ作り直すときは `expressions` に `--only 照れ ドヤ顔 --count 4` のように渡します。候補は `out/expressions/<表情>-<番号>.png` に出るので、目視で選んで `<表情>.png` へ改名してから仕上げます。
+
 ## 手元での仕上げ
 
 リポジトリのルートで実行します。
