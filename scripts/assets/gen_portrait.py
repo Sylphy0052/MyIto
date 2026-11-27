@@ -30,17 +30,18 @@ DETECT_THRESHOLD = 0.3
 BOX_MARGIN = 0.03  # 枠を広げる幅（短辺に対する割合）
 SHAPE_GROW = 0.03  # 顔のマスクを太らせる幅（短辺に対する割合）
 REDRAW_BLUR = (31, 10.0)  # 描き直した所の縁をぼかす（ImageBlurの半径・sigma）
-DENOISE = 0.55  # expressions.DENOISE
+DENOISE = 0.75  # expressions.DENOISE
 
 # expressions.pyのEXPRESSIONS・TAGS。通常は元の画像のまま
-EXPRESSIONS = ("通常", "笑顔", "照れ", "怒り", "泣き", "驚き", "困惑")
+EXPRESSIONS = ("通常", "笑顔", "照れ", "怒り", "泣き", "驚き", "困惑", "ドヤ顔")
 TAGS = {
-    "笑顔": "smile, open mouth, happy, :d",
-    "照れ": "blush, embarrassed, shy, light smile, looking away",
-    "怒り": "angry, frown, v-shaped eyebrows, clenched teeth",
-    "泣き": "crying, tears, sad, streaming tears, frown",
-    "驚き": "surprised, wide-eyed, open mouth, raised eyebrows",
-    "困惑": "confused, troubled eyebrows, sweatdrop, frown, closed mouth",
+    "笑顔": "smile, open mouth, laughing, happy, closed eyes, ^_^",
+    "照れ": "heavy blush, embarrassed, shy, light smile, looking away",
+    "怒り": "angry, frown, v-shaped eyebrows, clenched teeth, puffed cheeks, angry vein",
+    "泣き": "crying, streaming tears, sad, wavy mouth, frown",
+    "驚き": "surprised, shocked, wide-eyed, wide open mouth, raised eyebrows",
+    "困惑": "confused, @_@, troubled eyebrows, sweatdrop, frown, closed mouth",
+    "ドヤ顔": "smug, closed mouth, smirk, raised eyebrow, looking sideways",
 }
 
 Box = tuple[int, int, int, int]
@@ -324,7 +325,7 @@ def main() -> None:
         "--seed", type=int, help="先頭のseed（候補ごとに+1）。省略でランダム"
     )
     base.set_defaults(func=cmd_base)
-    expr = sub.add_parser("expressions", help="選んだ1枚から7表情を作る")
+    expr = sub.add_parser("expressions", help="選んだ1枚から8表情を作る")
     expr.add_argument("--base", type=Path, required=True)
     expr.add_argument("--out", type=Path, required=True)
     expr.add_argument(
