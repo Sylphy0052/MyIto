@@ -36,7 +36,7 @@ await page.getByLabel('ニックネーム').fill('試験者');
 await page.getByRole('button', { name: 'ルームを作る' }).click();
 await page.locator('.code').waitFor();
 await page.getByRole('radio', { name: '10の扉' }).click();
-await page.locator('select').first().selectOption('ai');
+await page.locator('.field-row', { hasText: 'GMの決め方' }).locator('select').first().selectOption('ai');
 await page.getByPlaceholder('テーマを自由入力').fill('好きな動物');
 await page.getByRole('button', { name: '決定' }).click();
 await page.waitForTimeout(500);
