@@ -15,10 +15,13 @@ const TILT = { rotate: [0, 6, 4, 6, 0], transition: KEYFRAME_TRANSITION }; // un
 const PUFF = { scaleY: [1, 1.06, 1], transition: KEYFRAME_TRANSITION }; // wrong・lose: 胸を張る
 const SINK = { y: [0, 12, 12, 0], transition: SINK_TRANSITION }; // win・error: 沈む
 
+// 動きの途中で合図が変わっても、止まった位置に残らず静止位置へ戻す
+const REST = { x: 0, y: 0, rotate: 0, scale: 1, scaleY: 1, transition: KEYFRAME_TRANSITION };
+
 /** 合図が変わった瞬間のワンショットの動き。reduced-motionでは client/src/main.tsx の MotionConfig がtransformを止める */
 const CUE_MOTION: Variants = {
-  idle: {},
-  thinking: {},
+  idle: REST,
+  thinking: REST,
   yes: HOP,
   no: { rotate: [0, -6, 6, -5, 5, 0], transition: KEYFRAME_TRANSITION },
   'maybe-yes': { scale: [1, 0.94, 1], transition: KEYFRAME_TRANSITION },
