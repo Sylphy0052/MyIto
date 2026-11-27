@@ -1,7 +1,7 @@
 // 10の扉の1手番の制限時間を3クライアント (GM 1 + 回答者 2) で通す
 // サーバは `DOORS_TURN_UNIT_MS=2000` で起動する (10秒を2秒に縮める。60秒 = 12秒)
 // 流れ: 60秒設定 → 確定から数える → 届くと止まる → 取り消すと残りから再開 → GMが答えると満タンから数え直す
-//       → 時間切れで回数を使い承認待ちが新しい順に取り消される → 回数を使い切ると最終解答へ (手番は出ない)
+//       → 時間切れで回数を使い、承認待ちは残る → 回数を使い切ると最終解答へ (手番は出ない)
 // 使い方: node doors-turn-check.mjs <base URL> <screenshot dir>
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';

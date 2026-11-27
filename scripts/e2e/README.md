@@ -27,5 +27,5 @@ Chromeは`/usr/bin/google-chrome`を使う (`--no-sandbox`)。別の場所なら
 
 ## 注意
 
-- `npm start`は環境変数のファイルを読まない (読むのはdocker composeだけ)。AIモードを試すには`ASK_API_KEY`と`ASK_PROJECT_ID`をプロセスの環境変数で渡す
+- `npm start`はrepoのルートに`.env`があれば読む (プロセスにある環境変数が優先)。無ければ`ASK_API_KEY`と`ASK_PROJECT_ID`をプロセスの環境変数で渡す
 - 撮影したスクリーンショットはrepoに置かない
