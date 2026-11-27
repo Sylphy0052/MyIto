@@ -69,6 +69,8 @@ function broadcast(room: Room): void {
   room.lastActiveAt = Date.now();
   // 状態が変わるたびに、AI GMが次にすることがあるかを見る。処理中の印は配信の前に付ける
   driveAiGm(room);
+  // 10の扉でGMがランダムなら、ロビーで次のGMを引いておいてから配る (切断・退出・設定変更で決め直す)
+  room.refreshNextGm();
   for (const s of io.sockets.sockets.values() as Iterable<GameSocket>) {
     if (s.data.code === room.code && s.data.playerId) {
       s.emit('state', room.viewFor(s.data.playerId));
@@ -363,6 +365,7 @@ io.on('connection', (socket: GameSocket) => {
   // ---- 10の扉 ----
   socket.on('mode', withRoom(socket, (room, pid, p) => room.setMode(pid, p.mode)));
   socket.on('doors:settings', withRoom(socket, (room, pid, p) => room.setDoorsSettings(pid, p)));
+  socket.on('doors:reroll-gm', withRoom(socket, (room, pid) => room.rerollGm(pid)));
   socket.on(
     'doors:answer',
     withRoom(socket, (room, pid, p) =>

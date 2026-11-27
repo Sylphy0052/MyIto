@@ -76,6 +76,8 @@ export class Room {
   doors: DoorsRound | null = null;
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
   lastGmId = '';
+  /** GMがランダムのとき、ロビーで先に引いておいた次のGM。開始時はこの人がGMになる */
+  nextGmId = '';
   /** AI GMがこのルームで使った答え (古い順) */
   aiAnswers: string[] = [];
   cardsPerPlayer = 1;
@@ -281,9 +283,44 @@ export class Room {
       if (!gm) throw new GameError('指名したGMが接続していません。GMを指名し直してください');
       return gm;
     }
-    // 3人以上なら、直前のGMを候補から外す
-    const pool = seated.length >= 3 ? seated.filter((p) => p.id !== this.lastGmId) : seated;
-    return pool[Math.floor(Math.random() * pool.length)]!;
+    this.refreshNextGm();
+    const gm = seated.find((p) => p.id === this.nextGmId);
+    if (!gm) throw new GameError('GMを抽選できませんでした');
+    return gm;
+  }
+
+  /** ロビーで10の扉のGMをランダムに決める設定か。このときだけ次のGMを先に引いておく */
+  private isRandomGmLobby(): boolean {
+    return this.phase === 'lobby' && this.mode === 'doors' && this.doorsSettings.gmPick === 'random';
+  }
+
+  /** ランダムのGMの抽選対象。3人以上なら、直前のGMを外す */
+  private randomGmPool(): Player[] {
+    const seated = this.players.filter((p) => p.connected);
+    return seated.length >= 3 ? seated.filter((p) => p.id !== this.lastGmId) : seated;
+  }
+
+  /**
+   * 次のGM (nextGmId) を今の状態に合わせて決め直す。状態を配る前と、開始時に呼ぶ。
+   * ロビーでGMがランダムなら、引いた人が抽選対象から外れた (切断・退出など) ときだけ引き直す。それ以外では空にする
+   */
+  refreshNextGm(): void {
+    if (!this.isRandomGmLobby()) {
+      this.nextGmId = '';
+      return;
+    }
+    const pool = this.randomGmPool();
+    if (pool.some((p) => p.id === this.nextGmId)) return;
+    this.nextGmId = pool.length === 0 ? '' : pool[Math.floor(Math.random() * pool.length)]!.id;
+  }
+
+  /** ホストが次のGMを引き直す。今の人以外から引く */
+  rerollGm(playerId: string): void {
+    this.requireHost(playerId);
+    if (!this.isRandomGmLobby()) throw new GameError('ロビーでGMがランダムのときだけ引き直せます');
+    const others = this.randomGmPool().filter((p) => p.id !== this.nextGmId);
+    if (others.length === 0) throw new GameError('ほかに引ける人がいません');
+    this.nextGmId = others[Math.floor(Math.random() * others.length)]!.id;
   }
 
   private startDoors(seated: readonly Player[]): void {
@@ -299,6 +336,7 @@ export class Room {
     const gm = this.pickGm(seated);
     this.doors = new DoorsRound(gm.id, this.doorsSettings.questions, this.doorsSettings.maxLies, this.timeLimitMs(), this.turnLimitMs());
     this.lastGmId = gm.id;
+    this.nextGmId = '';
     this.round += 1;
     this.notice = `${gm.name} さんがGMです`;
     this.phase = this.doors.phase;
@@ -499,7 +537,10 @@ export class Room {
     return idx >= 0 && idx < this.revealed;
   }
 
-  /** viewer 向けの状態。本人のカードと公開済みのカード以外の数字は送らない */
+  /**
+   * viewer 向けの状態。本人のカードと公開済みのカード以外の数字は送らない。
+   * nextGmId は読むだけなので、配る前に refreshNextGm を呼んでおく (server/index.ts の broadcast が呼ぶ)
+   */
   viewFor(viewerId: string): RoomView {
     return {
       code: this.code,
@@ -515,6 +556,7 @@ export class Room {
       topicCandidates: this.topicCandidates,
       aiBusy: this.aiBusy,
       aiAvailable: isAskConfigured(),
+      nextGmId: this.nextGmId,
       notice: this.notice,
       round: this.round,
       players: this.players.map((p) => ({ id: p.id, name: p.name, connected: p.connected })),

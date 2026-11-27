@@ -187,6 +187,8 @@ export interface RoomView {
   aiBusy: boolean;
   /** ASK API の設定があり、AIを使えるか。無ければ10の扉のAI GMを選べない */
   aiAvailable: boolean;
+  /** 10の扉でGMがランダムのとき、ロビーで引いておいた次のGM。それ以外は空 */
+  nextGmId: string;
   notice: string;
   round: number;
   players: PlayerView[];
