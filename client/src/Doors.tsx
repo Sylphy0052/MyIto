@@ -265,7 +265,7 @@ function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: 
       )}
 
       <div className="doors-columns">
-        {isGm ? <GmQueue doors={doors} act={act} /> : <ProposalForm view={view} doors={doors} isFinal={isFinal} act={act} />}
+        {isGm ? <GmQueue doors={doors} act={act} /> : <ProposalForm doors={doors} isFinal={isFinal} act={act} />}
         <ActiveList view={view} doors={doors} active={isGm ? active.filter((p) => p.status === 'proposed') : active} isGm={isGm} act={act} />
       </div>
 
@@ -338,7 +338,7 @@ function LatestReply({ doors }: { doors: DoorsView }) {
   );
 }
 
-function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: DoorsView; isFinal: boolean; act: Act }) {
+function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: boolean; act: Act }) {
   const [kind, setKind] = useState<ProposalKind>('question');
   const [text, setText] = useState('');
   const sendKind: ProposalKind = isFinal ? 'guess' : kind;
@@ -351,17 +351,11 @@ function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: Do
         : undefined,
     [doors.proposals, key],
   );
+  // 質問の段階は残り回数を超えてストックできる。超えた分は回数を使い切った時点で未処理になる
   const activeCount = doors.proposals.filter((p) => ACTIVE.has(p.status) && !p.isFinal).length;
-  const mine = doors.proposals.filter((p) => p.authorId === view.you && p.status === 'proposed').length;
-  const blocker = isFinal
-    ? doors.proposals.some((p) => ACTIVE.has(p.status) && p.isFinal)
-      ? '最終解答は1件ずつ出せます'
-      : ''
-    : activeCount >= doors.limit - doors.used
-      ? '残り回数の分だけ提案が出ています'
-      : mine >= LIMITS.doorsPendingPerPlayer
-        ? `承認待ちは1人${LIMITS.doorsPendingPerPlayer}件までです`
-        : '';
+  const isOverStock = !isFinal && activeCount >= doors.limit - doors.used;
+  const blocker =
+    isFinal && doors.proposals.some((p) => ACTIVE.has(p.status) && p.isFinal) ? '最終解答は1件ずつ出せます' : '';
 
   const submit = async () => {
     if (!text.trim() || blocker) return;
@@ -403,6 +397,7 @@ function ProposalForm({ view, doors, isFinal, act }: { view: RoomView; doors: Do
         </p>
       )}
       {blocker && <p className="muted">{blocker}</p>}
+      {isOverStock && <p className="muted">残り回数を超えてストックしています。回数を使い切ると、残った提案は未処理で終わります</p>}
       <p className="muted hint-text">
         提案は、提案者以外の回答者全員がOKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
       </p>

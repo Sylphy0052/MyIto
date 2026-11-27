@@ -136,7 +136,7 @@ const refilled = await turnSec(ra);
 check('GMが答えると満タン近く (10秒以上) から数え直す', refilled >= 10, `${refilled}s`);
 check('数え直しているので「(GMの回答待ち)」は無い', (await ra.locator('.turn-left', { hasText: 'GMの回答待ち' }).count()) === 0);
 
-// ---- 時間切れ: 承認待ちが残り回数を超えたら新しい順に取り消される ----
+// ---- 時間切れ: 残り回数を超えた承認待ちもストックとして残る ----
 const p1 = `大きいですか? ${TAG}`;
 const p2 = `海にいますか? ${TAG}`;
 await propose(ra, p1);
@@ -145,15 +145,14 @@ await shotAll('03-pending', all);
 await ra.getByText(TIMEOUT_NOTICE).first().waitFor({ timeout: 20000 });
 check('手番の時間切れの通知が全員に出る', (await Promise.all(all.map((p) => until(p.getByText(TIMEOUT_NOTICE).first().waitFor({ timeout: 5000 }))))).every(Boolean));
 await shotAll('04-timeout1', all);
-check('残り回数を超えた承認待ち (新しい方) は「(手番の時間切れ)」で取り消される', await until(item(rb, p2).getByText('(手番の時間切れ)').first().waitFor({ timeout: 5000 })));
-check('古い方の承認待ちは残る', (await item(rb, p1).getByText('(手番の時間切れ)').count()) === 0);
+check('残り回数を超えた承認待ちも取り消されずに残る', (await item(rb, p1).getByText('(手番の時間切れ)').count()) === 0 && (await item(rb, p2).getByText('(手番の時間切れ)').count()) === 0);
 check('時間切れのあと手番は満タン近くから数え直される', (await turnSec(ra)) >= 9, `${await turnSec(ra)}s`);
 
 // ---- 回数を使い切ると最終解答へ。手番は出ない ----
 await ra.getByText('最終解答を出す').first().waitFor({ timeout: 25000 });
 check('回数を使い切ると最終解答の段階へ進む', true);
 await shotAll('05-final', all);
-check('古い方の承認待ちも「(手番の時間切れ)」で取り消される', await until(item(rb, p1).getByText('(手番の時間切れ)').first().waitFor({ timeout: 5000 })));
+check('回数を使い切ると、残ったストックは「未処理」になる', (await Promise.all([p1, p2].map((t) => until(item(rb, t).getByText('未処理').first().waitFor({ timeout: 5000 }))))).every(Boolean));
 check('最終解答の段階では手番が出ない', (await Promise.all(all.map(async (p) => (await p.locator('.turn-left').count()) === 0))).every(Boolean));
 await ra.waitForTimeout(14000);
 check('最終解答の段階は、時間が過ぎても手番の時間切れにならない', (await ra.getByText('最終解答を出す').count()) === 1);

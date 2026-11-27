@@ -23,9 +23,7 @@ export const LIMITS = {
   /** 10の扉: 延長を含めた残り時間の上限 (分) */
   doorsMaxTimeLeftMin: 99,
   doorsMaxLies: 3,
-  /** 10の扉: 1人が同時に出せる承認待ちの数 */
-  doorsPendingPerPlayer: 2,
-  /** 10の扉: ログに残す提案の数 */
+  /** 10の扉: ログに残す提案の数。提案のストックに上限は無く、これが総数の歯止めになる */
   doorsLog: 500,
 } as const;
 
@@ -53,7 +51,7 @@ export const DOORS_AI_MODEL_LABEL: Record<DoorsAiModel, string> = {
 /** ai: AIがGMを務め、参加者全員が回答者になる */
 export type GmPick = 'random' | 'named' | 'ai';
 export type ProposalKind = 'question' | 'guess';
-/** proposed: 承認待ち / sent: GMへ送信済み / discarded: 終了時に未処理のまま破棄 */
+/** proposed: 承認待ち / sent: GMへ送信済み / discarded: 回数の使い切り・終了時に未処理のまま破棄 */
 export type ProposalStatus = 'proposed' | 'sent' | 'answered' | 'rejected' | 'cancelled' | 'discarded';
 export type QuestionReply = 'yes' | 'no' | 'maybe-yes' | 'maybe-no' | 'unknown';
 export type GuessReply = 'correct' | 'close' | 'wrong';
