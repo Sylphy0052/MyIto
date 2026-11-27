@@ -19,10 +19,10 @@ function formatLeft(ms: number): string {
  */
 export function TimeLeft({ doors }: { doors: DoorsView }) {
   const received = doors.timeLeftMs;
+  const isPaused = doors.isTimePaused;
   // 受け取った値と、そのとき手元で測った時刻。新しい値が届いたその描画で基準を替える (古い基準で1回描かない)
   const base = useMemo(() => ({ left: received, at: performance.now() }), [received, isPaused]);
   const [now, setNow] = useState(() => performance.now());
-  const isPaused = doors.isTimePaused;
   const isTicking = received !== null && !isPaused;
   useEffect(() => {
     if (!isTicking) return;
