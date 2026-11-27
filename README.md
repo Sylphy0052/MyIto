@@ -76,7 +76,7 @@ docker compose up -d --build
 AIお題 (10の扉ではテーマ) と10の扉のAI GMは、ASK APIを使う。使うなら`compose.yaml`と同じ場所の`.env`に次を書く。`ASK_API_URL`・`ASK_API_KEY`・`ASK_PROJECT_ID`のどれかが無ければ、AI生成は内蔵リストのお題に切り替わり、10の扉のAI GMは選べなくなる。
 
 ```sh
-ASK_API_URL=<ASK APIのURL (https)>
+ASK_API_URL=<ASK APIのURL (httpsのみ。httpはlocalhostだけ通る)>
 ASK_API_KEY=<APIキー>
 ASK_PROJECT_ID=<プロジェクトID>
 # 省略時の値
