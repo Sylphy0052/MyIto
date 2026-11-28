@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense, type KeyboardEvent } from 'react';
 import { AnimatePresence, m } from 'motion/react';
-import { isDoorsPhase, type RoomView } from '../../shared/types';
+import { isDoorsPhase, type ClientEventName, type ClientEventPayloads, type RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { DEAL_INTERVAL_S } from './dealTiming';
 import { ChunkErrorBoundary, GameLoading, lazyGame } from './lazyGame';
@@ -14,12 +14,13 @@ const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
 const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
-export type Act = (event: string, payload?: object) => Promise<boolean>;
+export type Act = <E extends ClientEventName>(event: E, payload?: ClientEventPayloads[E]) => Promise<boolean>;
 
 interface Props {
   view: RoomView;
   act: Act;
   onLeave: () => Promise<void>;
+  connected: boolean;
 }
 
 // ロビー以外ではお題を3行に省略する (行数はstyles.cssの`.topic-text.clamped`と揃える)。
@@ -72,7 +73,7 @@ function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
   );
 }
 
-export function RoomScreen({ view, act, onLeave }: Props) {
+export function RoomScreen({ view, act, onLeave, connected }: Props) {
   const isHost = view.you === view.hostId;
   const isDoorsRound = isDoorsPhase(view.phase);
   const nameOf = useCallback(
@@ -199,87 +200,88 @@ export function RoomScreen({ view, act, onLeave }: Props) {
           退室
         </button>
       </m.header>
+      <fieldset className="room-controls" disabled={!connected}>
+        <section className="topic">
+          <span className="label">{view.mode === 'doors' ? 'テーマ' : 'お題'}</span>
+          <AnimatePresence mode="wait" initial={false}>
+            <TopicText key={view.topic} topic={view.topic} isLobby={view.phase === 'lobby'} />
+          </AnimatePresence>
+        </section>
 
-      <section className="topic">
-        <span className="label">{view.mode === 'doors' ? 'テーマ' : 'お題'}</span>
-        <AnimatePresence mode="wait" initial={false}>
-          <TopicText key={view.topic} topic={view.topic} isLobby={view.phase === 'lobby'} />
+        <AnimatePresence>
+          {view.notice && (
+            <m.div
+              key={view.notice}
+              className="notice"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={NOTICE_COLLAPSE}
+            >
+              {view.notice}
+            </m.div>
+          )}
         </AnimatePresence>
-      </section>
 
-      <AnimatePresence>
-        {view.notice && (
-          <m.div
-            key={view.notice}
-            className="notice"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={NOTICE_COLLAPSE}
+        {view.phase !== 'lobby' && !isDoorsRound && myCards.length > 0 && (
+          <m.section
+            className="my-numbers"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: flow.isDealing ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
           >
-            {view.notice}
+            あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
+          </m.section>
+        )}
+
+        {view.phase !== 'lobby' && !isDoorsRound && myCards.length === 0 && (
+          <div className="notice">観戦中です。次のラウンドから参加できます</div>
+        )}
+
+        {view.phase === 'lobby' ? (
+          <m.div key="lobby" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+            <Lobby view={view} isHost={isHost} act={act} />
+          </m.div>
+        ) : isDoorsRound && view.doors ? (
+          <m.div key="doors" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+            <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Doors view={view} isHost={isHost} act={act} /></Suspense></ChunkErrorBoundary>
+          </m.div>
+        ) : (
+          <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+            <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} /></Suspense></ChunkErrorBoundary>
           </m.div>
         )}
-      </AnimatePresence>
 
-      {view.phase !== 'lobby' && !isDoorsRound && myCards.length > 0 && (
-        <m.section
-          className="my-numbers"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: flow.isDealing ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
-        >
-          あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
-        </m.section>
-      )}
+        {canRecover && (
+          <button className="small" onClick={() => act('lobby')}>
+            参加者が不在のためロビーに戻る
+          </button>
+        )}
 
-      {view.phase !== 'lobby' && !isDoorsRound && myCards.length === 0 && (
-        <div className="notice">観戦中です。次のラウンドから参加できます</div>
-      )}
-
-      {view.phase === 'lobby' ? (
-        <m.div key="lobby" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <Lobby view={view} isHost={isHost} act={act} />
-        </m.div>
-      ) : isDoorsRound && view.doors ? (
-        <m.div key="doors" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Doors view={view} isHost={isHost} act={act} /></Suspense></ChunkErrorBoundary>
-        </m.div>
-      ) : (
-        <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} /></Suspense></ChunkErrorBoundary>
-        </m.div>
-      )}
-
-      {canRecover && (
-        <button className="small" onClick={() => act('lobby')}>
-          参加者が不在のためロビーに戻る
-        </button>
-      )}
-
-      {view.phase === 'result' && (
-        <m.section
-          className="result"
-          initial={{ opacity: 0, y: 24, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-        >
-          <m.h2
-            className={isPerfect ? 'perfect' : undefined}
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.15, type: 'spring', stiffness: 320, damping: 12 }}
+        {view.phase === 'result' && (
+          <m.section
+            className="result"
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
           >
-            {isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}
-          </m.h2>
-          {isHost ? (
-            <button className="primary" onClick={() => act('lobby')}>
-              次のラウンドへ (ロビーに戻る)
-            </button>
-          ) : (
-            <p className="muted">ホストが次のラウンドを始めるのを待っています</p>
-          )}
-        </m.section>
-      )}
+            <m.h2
+              className={isPerfect ? 'perfect' : undefined}
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.15, type: 'spring', stiffness: 320, damping: 12 }}
+            >
+              {isPerfect ? '全部正しい順番でした!' : '答え合わせ完了'}
+            </m.h2>
+            {isHost ? (
+              <button className="primary" onClick={() => act('lobby')}>
+                次のラウンドへ (ロビーに戻る)
+              </button>
+            ) : (
+              <p className="muted">ホストが次のラウンドを始めるのを待っています</p>
+            )}
+          </m.section>
+        )}
+      </fieldset>
     </div>
   );
 }

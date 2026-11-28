@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import compression from 'compression';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { LIMITS, type Ack, type DoorsAiModel, type ShutdownNotice } from '../shared/types';
+import { LIMITS, type Ack, type ClientToServerEvents, type DoorsAiModel, type ServerToClientEvents, type ShutdownNotice } from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { AiLimitError, acquireAiSlot, generateTopics, releaseRoomAiSlots, sanitizeGenre } from './ai';
@@ -71,7 +71,7 @@ if (existsSync(clientDir)) {
   });
 }
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
+const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(httpServer, {
   maxHttpBufferSize: 16 * 1024,
   // 他サイトのページからの接続を断る
   allowRequest: (req, callback) => {
@@ -95,7 +95,7 @@ interface SocketData {
   doorsWindowStart?: number;
   doorsWindowCount?: number;
 }
-type GameSocket = Socket<any, any, any, SocketData>;
+type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>;
 
 // ルーム作成の間隔を数える単位ごとの、最後に作った時刻
 const lastCreateAt = new Map<string, number>();

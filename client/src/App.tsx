@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoomView, ShutdownNotice } from '../../shared/types';
+import type { ClientEventName, ClientEventPayloads, RoomView, ShutdownNotice } from '../../shared/types';
 import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
@@ -117,7 +117,7 @@ export function App() {
 
   /** ゲーム操作を送り、失敗したらエラーを表示する */
   const act = useCallback(
-    async (event: string, payload: object = {}) => {
+    async <E extends ClientEventName>(event: E, payload: ClientEventPayloads[E] = {} as ClientEventPayloads[E]) => {
       const res = await send(event, payload);
       if (!res.ok) showError(res.error);
       return res.ok;
@@ -148,6 +148,7 @@ export function App() {
           <m.div
             key="banner"
             className="banner"
+            role="status"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -175,7 +176,7 @@ export function App() {
       <AnimatePresence mode="wait">
         {view ? (
           <ScreenPanel key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <RoomScreen view={view} act={act} onLeave={leave} />
+            <RoomScreen view={view} act={act} onLeave={leave} connected={connected} />
           </ScreenPanel>
         ) : (
           <ScreenPanel key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
