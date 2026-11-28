@@ -291,4 +291,4 @@ export interface ServerToClientEvents {
 }
 
 // CI確認用: 型エラーを意図的に入れる (mergeしない)
-export const ciProbe: number = "not a number";
+export const ciProbe: number = 'not a number';
