@@ -59,6 +59,11 @@ app.use((_req, res, next) => {
   );
   next();
 });
+// 死活確認用。SPAのフォールバックより前に置く。内部の状態は返さない。終了処理中も200のまま (socket.ioのallowRequestや接続数制限はHTTPのこの経路に掛からない)
+app.get('/healthz', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true });
+});
 if (existsSync(clientDir)) {
   app.use(compression());
   app.use(
