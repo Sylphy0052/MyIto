@@ -95,8 +95,22 @@ function fadeTo(p: Player, target: number, onDone?: () => void): void {
 const state: {
   current: { category: BgmCategory; track: number; player: Player } | null;
   lastTrack: Partial<Record<BgmCategory, number>>;
+  /** 分類ごとに、次に鳴らす曲を先読みした音声要素 */
+  next: Partial<Record<BgmCategory, { track: number; audio: HTMLAudioElement }>>;
   gain: number;
-} = { current: null, lastTrack: {}, gain: 0 };
+} = { current: null, lastTrack: {}, next: {}, gain: 0 };
+
+const bgmUrl = (category: BgmCategory, track: number) => `/bgm/${category}-${track}.mp3`;
+
+/** 同じ分類の次の曲 (今の曲と別) を1本決め、先に読み込んでおく。なしのときはしない */
+function preloadNext(category: BgmCategory, currentTrack: number): void {
+  if (state.gain === 0 || state.next[category]) return;
+  const track = pickTrack(currentTrack);
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = bgmUrl(category, track);
+  state.next[category] = { track, audio };
+}
 
 /** 鳴るはずの曲が (再生の許可前に拒否されて) 止まっていれば、もう一度再生する */
 function resumeIfBlocked(): void {
@@ -129,6 +143,7 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
       } else {
         player.audio.play().catch(() => {});
         fadeTo(player, gain);
+        preloadNext(category, current.track);
       }
       return;
     }
@@ -136,9 +151,11 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
       const old = current.player;
       fadeTo(old, 0, () => old.audio.pause());
     }
-    const track = pickTrack(state.lastTrack[category]);
+    const held = state.next[category];
+    delete state.next[category];
+    const track = held?.track ?? pickTrack(state.lastTrack[category]);
     state.lastTrack[category] = track;
-    const audio = new Audio(`/bgm/${category}-${track}.mp3`);
+    const audio = held?.audio ?? new Audio(bgmUrl(category, track));
     audio.loop = true;
     audio.volume = 0;
     const player: Player = { audio, timer: undefined };
@@ -149,6 +166,7 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
       });
     }
     fadeTo(player, gain, gain === 0 ? () => audio.pause() : undefined);
+    preloadNext(category, track);
   }, [isReady, category, volume]);
 }
 
