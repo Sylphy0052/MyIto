@@ -1,16 +1,13 @@
 // #25 の画面確認: ホストとゲストの2クライアントで、候補表示・生成中表示・選択の反映を見る
 // 使い方: node lobby-check.mjs <base URL> <screenshot dir>
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47302';
 const out = process.argv[3] ?? './shots';
 mkdirSync(out, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath: '/usr/bin/google-chrome',
-  args: ['--no-sandbox'],
-});
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok) => {
   results.push({ name, ok });

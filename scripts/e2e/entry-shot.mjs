@@ -1,11 +1,11 @@
 // ログイン画面のタイトルを、幅違いで撮り、はみ出しを調べる
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 
 const base = process.argv[2] ?? 'http://localhost:47304';
 const out = process.argv[3] ?? './shots-entry';
 import { mkdirSync } from 'node:fs';
 mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 for (const width of [320, 360, 390, 1280]) {
   const page = await (await browser.newContext({ viewport: { width, height: 800 } })).newPage();
   await page.goto(base);

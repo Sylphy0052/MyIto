@@ -1,6 +1,6 @@
 import { LIMITS, QUESTION_REPLIES, type DoorsAiModel, type GuessReply, type QuestionReply } from '../shared/types';
 import { normalizeText } from '../shared/normalize';
-import { AiLimitError, acquireAiSlot, askChat, looksUnsafe } from './ai';
+import { AiLimitError, acquireAiSlot, askChat, looksUnsafe, roomAiSignal } from './ai';
 
 /** 事実メモの上限。200字程度を頼み、はみ出しても切って使う */
 const MAX_MEMO_CHARS = 400;
@@ -96,7 +96,7 @@ function text(value: unknown, max: number): string {
 async function call(roomCode: string, model: DoorsAiModel, template: string, data: unknown): Promise<string> {
   const limited = acquireAiSlot('doors', roomCode);
   if (limited) throw new AiLimitError(limited);
-  const { message } = await askChat(template, JSON.stringify(data), model);
+  const { message } = await askChat(template, JSON.stringify(data), model, roomAiSignal(roomCode));
   return message;
 }
 

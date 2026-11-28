@@ -15,10 +15,31 @@ const MAX_OUTPUT_CHARS = 2_000;
 // 改行の来ない1行をため続けないための上限
 const MAX_LINE_CHARS = 64_000;
 const MAX_ERROR_DETAIL_CHARS = 200;
+/** ASK API へ同時に出せる呼出の数 (全ルーム共有。再試行も含む)。超えたら待たせず AiLimitError で断る */
+export const MAX_CONCURRENT_CALLS = 4;
+/** 5xx のとき、再試行までに待つ時間 */
+export const RETRY_DELAY_5XX_MS = 1_000;
+/** 429 のとき、再試行までに待つ時間。連続で送ると 429 が続くので 5xx より長く空ける (Retry-After があればそれ。上限 RETRY_DELAY_MAX_MS) */
+export const RETRY_DELAY_429_MS = 3_000;
+const RETRY_DELAY_MAX_MS = 5_000;
 
 export type AiBucket = 'topic' | 'doors';
 const calls: Record<AiBucket, number[]> = { topic: [], doors: [] };
 const roomCalls = new Map<string, number[]>();
+
+let inFlight = 0;
+/** ルームごとの中断用。ルームを消すときに abort して、実行中の呼出を打ち切る */
+const roomAborts = new Map<string, AbortController>();
+
+/** そのルームのAI呼出を中断するための signal。ルームが消えたら abort される */
+export function roomAiSignal(roomCode: string): AbortSignal {
+  let c = roomAborts.get(roomCode);
+  if (!c) {
+    c = new AbortController();
+    roomAborts.set(roomCode, c);
+  }
+  return c.signal;
+}
 
 /** 上限で断られたことを示すエラー。呼出側は文言を書き分けるためにこれで見分ける */
 export class AiLimitError extends Error {}
@@ -67,8 +88,10 @@ export function acquireAiSlot(bucket: AiBucket, roomCode: string, now = Date.now
   return null;
 }
 
-/** ルームを消すときに、そのルームの枠の記録を消す (ルームのコードは使い回されるため) */
+/** ルームを消すときに、そのルームの枠の記録を消し、実行中のAI呼出を中断する (ルームのコードは使い回されるため) */
 export function releaseRoomAiSlots(roomCode: string): void {
+  roomAborts.get(roomCode)?.abort();
+  roomAborts.delete(roomCode);
   for (const bucket of ['topic', 'doors'] as const) roomCalls.delete(`${bucket}:${roomCode}`);
 }
 
@@ -243,16 +266,41 @@ export function isAskConfigured(): boolean {
   return configProblems.length === 0;
 }
 
-/**
- * ASK API へ1回だけ問い合わせ、本文を返す。毎回新しい chatId を使うので履歴は持たない。
- * template は system prompt、userInput は利用者由来のデータ。TIMEOUT_MS を超えたら Error を投げる
- */
-export async function askChat(template: string, userInput: string, model: string): Promise<Answer> {
-  if (configProblems.length > 0) {
-    throw new Error(`ASK API is not configured: ${configProblems.join(', ')}`);
+/** 再試行してよい失敗か。5xx と 429 だけ。タイムアウトと他の 4xx は再試行しない */
+class RetryableAskError extends Error {
+  constructor(message: string, readonly delayMs: number) {
+    super(message);
   }
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('ASK API call aborted'));
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(new Error('ASK API call aborted'));
+    };
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function retryDelayMs(status: number, retryAfter: string | null): number {
+  if (status !== 429) return RETRY_DELAY_5XX_MS;
+  const sec = Number(retryAfter);
+  if (retryAfter && Number.isFinite(sec) && sec > 0) return Math.min(sec * 1000, RETRY_DELAY_MAX_MS);
+  return RETRY_DELAY_429_MS;
+}
+
+async function askOnce(template: string, userInput: string, model: string, signal?: AbortSignal): Promise<Answer> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  signal?.addEventListener('abort', onExternalAbort, { once: true });
+  if (signal?.aborted) controller.abort();
   try {
     const res = await fetch(`${ASK_API_URL}/api/chat/?requireMessageId=True`, {
       method: 'POST',
@@ -282,21 +330,62 @@ export async function askChat(template: string, userInput: string, model: string
     if (!res.ok) {
       // 切り詰める位置をまたぐキーも丸ごと読んでから伏せる
       const detail = await readHead(res.body, MAX_ERROR_DETAIL_CHARS + ASK_API_KEY.length);
-      throw new Error(`ASK API returned ${res.status}: ${maskSecrets(detail).slice(0, MAX_ERROR_DETAIL_CHARS)}`);
+      const msg = `ASK API returned ${res.status}: ${maskSecrets(detail).slice(0, MAX_ERROR_DETAIL_CHARS)}`;
+      if (res.status >= 500 || res.status === 429) {
+        throw new RetryableAskError(msg, retryDelayMs(res.status, res.headers.get('retry-after')));
+      }
+      throw new Error(msg);
     }
     if (!res.body) throw new Error('ASK API returned no body');
     return await readAnswer(res.body);
   } catch (e) {
+    if (signal?.aborted) throw new Error('ASK API call aborted');
     if (controller.signal.aborted) throw new Error('ASK API timed out');
     throw e;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onExternalAbort);
+  }
+}
+
+/**
+ * ASK API へ問い合わせ、本文を返す。毎回新しい chatId を使うので履歴は持たない。
+ * template は system prompt、userInput は利用者由来のデータ。
+ * 同時実行が MAX_CONCURRENT_CALLS に達していれば AiLimitError。5xx と 429 は1回だけ再試行する (再試行中も枠を持つ)。
+ * 1回ごとに TIMEOUT_MS を超えたら Error を投げる。signal が abort されたら待機中・通信中を問わず Error を投げる
+ */
+export async function askChat(template: string, userInput: string, model: string, signal?: AbortSignal): Promise<Answer> {
+  if (configProblems.length > 0) {
+    throw new Error(`ASK API is not configured: ${configProblems.join(', ')}`);
+  }
+  if (signal?.aborted) throw new Error('ASK API call aborted');
+  if (inFlight >= MAX_CONCURRENT_CALLS) {
+    console.warn(`ASK API call rejected: concurrent limit (${MAX_CONCURRENT_CALLS}) reached`);
+    throw new AiLimitError(`AIが混み合っています (同時に${MAX_CONCURRENT_CALLS}件まで)。少し待ってからもう一度お試しください`);
+  }
+  inFlight++;
+  try {
+    try {
+      return await askOnce(template, userInput, model, signal);
+    } catch (e) {
+      if (!(e instanceof RetryableAskError)) throw e;
+      console.warn(`ASK API retry in ${e.delayMs}ms: ${e.message}`);
+      await sleep(e.delayMs, signal);
+      return await askOnce(template, userInput, model, signal);
+    }
+  } finally {
+    inFlight--;
   }
 }
 
 /** ASK API でお題 (10の扉ではテーマ) の候補を最大 LIMITS.aiCandidates 個作る。1つも作れなければ Error を投げる */
-export async function generateTopics(genre: string, mode: GameMode = 'ito'): Promise<string[]> {
-  const { message, skippedLines, truncated } = await askChat(TEMPLATES[mode], buildUserInput(genre), ASK_MODEL);
+export async function generateTopics(genre: string, mode: GameMode = 'ito', roomCode?: string): Promise<string[]> {
+  const { message, skippedLines, truncated } = await askChat(
+    TEMPLATES[mode],
+    buildUserInput(genre),
+    ASK_MODEL,
+    roomCode === undefined ? undefined : roomAiSignal(roomCode),
+  );
   // 打ち切った応答は最終行が途中で切れているので捨てる
   // 改行が無ければ1行だけなので、normalizeTopic の文字数制限に任せる
   const lastBreak = message.lastIndexOf('\n');

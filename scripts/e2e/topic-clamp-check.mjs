@@ -1,6 +1,6 @@
 // #85 の画面確認: ゲーム中のお題が3行に省略され、タップで全文と3行を切り替えられるか (390x844)
 // 使い方: node topic-clamp-check.mjs <base URL> <screenshot dir>
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47302';
@@ -11,7 +11,7 @@ const LONG = 'あ'.repeat(10) + 'い'.repeat(10) + 'う'.repeat(10) + 'え'.repe
   'か'.repeat(10) + 'き'.repeat(10) + 'く'.repeat(10) + 'け'.repeat(10) + 'こ'.repeat(10);
 const SHORT = 'ねこのなまえ十字';
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok) => {
   results.push({ name, ok });
