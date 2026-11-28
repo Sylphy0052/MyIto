@@ -426,7 +426,9 @@ function probeOtherSeatSockets(current: GameSocket, code: string, playerId: stri
   for (const other of roomSockets(code)) {
     if (other === current || other.data.code !== code || other.data.playerId !== playerId) continue;
     other.timeout(SEAT_PROBE_TIMEOUT_MS).emit('seat:probe', (err: Error | null) => {
-      if (err) other.conn.close();
+      // discard=true: 未送信のパケット (この probe 自身) の送信完了を待たずに閉じる。
+      // 待つと、ポーリング中の死んだ接続では drain が来ず、閉じずに枠が残る
+      if (err) other.conn.close(true);
     });
   }
 }
