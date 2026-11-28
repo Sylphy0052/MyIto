@@ -1,8 +1,9 @@
 import './loadEnv';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { LIMITS, type Ack, type DoorsAiModel } from '../shared/types';
@@ -45,8 +46,22 @@ app.use((_req, res, next) => {
   next();
 });
 if (existsSync(clientDir)) {
-  app.use(express.static(clientDir));
-  app.get('/{*path}', (_req, res) => res.sendFile(join(clientDir, 'index.html')));
+  app.use(compression());
+  app.use(
+    express.static(clientDir, {
+      // 既定のETag/Last-Modifiedは残し、Cache-Controlだけ種類ごとに上書きする
+      setHeaders: (res, filePath) => {
+        const rel = relative(clientDir, filePath).split(sep);
+        if (rel[0] === 'assets') res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        else if (rel[0] === 'bgm' || rel[0] === 'gm') res.setHeader('Cache-Control', 'public, max-age=86400');
+        else if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      },
+    }),
+  );
+  app.get('/{*path}', (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    res.sendFile(join(clientDir, 'index.html'));
+  });
 }
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
