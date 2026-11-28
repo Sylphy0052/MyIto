@@ -93,7 +93,7 @@ function fadeTo(p: Player, target: number, onDone?: () => void): void {
 }
 
 const state: {
-  current: { category: BgmCategory; track: number; player: Player } | null;
+  current: { category: BgmCategory; track: number; player: Player | null } | null;
   lastTrack: Partial<Record<BgmCategory, number>>;
   /** 分類ごとに、次に鳴らす曲を先読みした音声要素 */
   next: Partial<Record<BgmCategory, { track: number; audio: HTMLAudioElement }>>;
@@ -116,7 +116,7 @@ function preloadNext(category: BgmCategory, currentTrack: number): void {
 function resumeIfBlocked(): void {
   const current = state.current;
   // 読み込みに失敗した曲 (404など) は、操作のたびに取りに行かない
-  if (!current || state.gain === 0 || !current.player.audio.paused || current.player.audio.error) return;
+  if (!current?.player || state.gain === 0 || !current.player.audio.paused || current.player.audio.error) return;
   current.player.audio.play().catch(() => {});
 }
 
@@ -135,7 +135,7 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
     const gain = BGM_GAIN[volume];
     state.gain = gain;
     const current = state.current;
-    if (current && current.category === category) {
+    if (current && current.category === category && current.player) {
       // 分類は同じで音量だけ変わった。なしのときは止め、戻したときは続きから鳴らす
       const { player } = current;
       if (gain === 0) {
@@ -147,9 +147,14 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
       }
       return;
     }
-    if (current) {
+    if (current?.player) {
       const old = current.player;
       fadeTo(old, 0, () => old.audio.pause());
+    }
+    if (gain === 0) {
+      // なしの間はAudio要素を作らず、取得もしない。曲は鳴らすときに選ぶ
+      state.current = { category, track: 0, player: null };
+      return;
     }
     const held = state.next[category];
     delete state.next[category];
@@ -160,12 +165,10 @@ export function useBgm(category: BgmCategory, volume: BgmVolume): void {
     audio.volume = 0;
     const player: Player = { audio, timer: undefined };
     state.current = { category, track, player };
-    if (gain > 0) {
-      audio.play().catch(() => {
-        // 再生できなくても進行は止めない
-      });
-    }
-    fadeTo(player, gain, gain === 0 ? () => audio.pause() : undefined);
+    audio.play().catch(() => {
+      // 再生できなくても進行は止めない
+    });
+    fadeTo(player, gain);
     preloadNext(category, track);
   }, [isReady, category, volume]);
 }
