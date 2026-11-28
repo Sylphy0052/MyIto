@@ -300,9 +300,9 @@ io.on('connection', (socket: GameSocket) => {
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
     const now = Date.now();
-    for (const [key, at] of lastCreateAt) if (now - at >= CREATE_INTERVAL_MS) lastCreateAt.delete(key);
     const limitKey = createKey(socket);
-    if (lastCreateAt.has(limitKey)) {
+    const lastAt = lastCreateAt.get(limitKey);
+    if (lastAt !== undefined && now - lastAt < CREATE_INTERVAL_MS) {
       return ack({ ok: false, error: 'ルームの作成は30秒に1回までです。少し待ってください' });
     }
     if (rooms.size >= MAX_ROOMS) return ack({ ok: false, error: 'ルーム数が上限です。既存のルームに入ってください' });
@@ -488,6 +488,7 @@ setInterval(() => {
       releaseRoomAiSlots(code);
     }
   }
+  for (const [key, at] of lastCreateAt) if (now - at >= CREATE_INTERVAL_MS) lastCreateAt.delete(key);
 }, SWEEP_INTERVAL_MS);
 
 httpServer.listen(PORT, () => {
