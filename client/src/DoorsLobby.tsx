@@ -1,6 +1,7 @@
 import { m, type Variants } from 'motion/react';
 import { DOORS_AI_MODELS, DOORS_AI_MODEL_LABEL, DOORS_TIME_LIMITS, DOORS_TURN_LIMITS, LIMITS, type DoorsAiModel, type GameMode, type GmPick, type RoomView } from '../../shared/types';
 import type { Act } from './RoomScreen';
+import { RadioGroup } from './RadioGroup';
 
 export const MODE_LABEL: Record<GameMode, string> = { ito: 'ito', doors: '10の扉' };
 
@@ -55,20 +56,15 @@ export function DoorsSummary({ view }: { view: RoomView }) {
 
 export function ModeToggle({ view, act }: { view: RoomView; act: Act }) {
   return (
-    <div className="kind-toggle mode-toggle" role="radiogroup" aria-label="ゲームの種類">
-      {(['ito', 'doors'] as const).map((mode) => (
-        <button
-          key={mode}
-          role="radio"
-          aria-checked={view.mode === mode}
-          className={view.mode === mode ? 'selected' : ''}
-          disabled={view.aiBusy}
-          onClick={() => act('mode', { mode })}
-        >
-          {MODE_LABEL[mode]}
-        </button>
-      ))}
-    </div>
+    <RadioGroup
+      label="ゲームの種類"
+      className="kind-toggle mode-toggle"
+      options={['ito', 'doors'] as const}
+      value={view.mode}
+      getLabel={(mode) => MODE_LABEL[mode]}
+      onChange={(mode) => void act('mode', { mode })}
+      disabled={view.aiBusy}
+    />
   );
 }
 
