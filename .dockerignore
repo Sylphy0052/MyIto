@@ -1,6 +1,14 @@
 node_modules
 dist
 .git
+.github
 .worktree
+.agents
+.claude
+.idea
+.vscode
+docs
+scripts
+*.md
 .env
 .env.*
