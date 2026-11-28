@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense, type KeyboardEvent } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { isDoorsPhase, type RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
-import { Board, DEAL_INTERVAL_S } from './Board';
+import { DEAL_INTERVAL_S } from './dealTiming';
+import { ChunkErrorBoundary, GameLoading, lazyGame } from './lazyGame';
 import { copyText } from './copyText';
-import { Doors } from './Doors';
 import { isPerfectOrder } from './bgm';
+
+const Board = lazyGame(() => import('./Board').then((m) => ({ default: m.Board })));
+const Doors = lazyGame(() => import('./Doors').then((m) => ({ default: m.Doors })));
 
 const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
@@ -239,11 +242,11 @@ export function RoomScreen({ view, act, onLeave }: Props) {
         </m.div>
       ) : isDoorsRound && view.doors ? (
         <m.div key="doors" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <Doors view={view} isHost={isHost} act={act} />
+          <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Doors view={view} isHost={isHost} act={act} /></Suspense></ChunkErrorBoundary>
         </m.div>
       ) : (
         <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} />
+          <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} /></Suspense></ChunkErrorBoundary>
         </m.div>
       )}
 

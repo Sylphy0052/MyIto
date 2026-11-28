@@ -1,7 +1,7 @@
 import { AnimatePresence, m, type TargetAndTransition, type Transition, type Variants } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { DoorsView } from '../../shared/types';
-import { expressionForCue, gmCueFor, gmImageFor, type GmCue } from './gmExpression';
+import { expressionForCue, gmCueFor, gmImageFor, preloadGmImages, type GmCue } from './gmExpression';
 
 /** 漫符を出しておく時間 (ms) */
 const MARK_MS = 1300;
@@ -83,6 +83,11 @@ function AiPortrait({ cue }: { cue: GmCue }) {
   const [markCue, setMarkCue] = useState<GmCue | null>(null);
   // 前回の合図。表示を開いた時点の合図は「変わった」ではないので、漫符を出さない (動きも initial={false} で出ない)
   const prevCue = useRef(cue);
+
+  // AI GMの画面が出た時点で全表情の画像を先読みする
+  useEffect(() => {
+    preloadGmImages();
+  }, []);
 
   useEffect(() => {
     if (prevCue.current === cue) return;
