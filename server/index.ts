@@ -25,6 +25,14 @@ const SWEEP_INTERVAL_MS = 60_000;
 // 接続ごとに数えると、つなぎ直すだけで逃れられる
 const CREATE_INTERVAL_MS = 30_000;
 const MAX_ROOMS = 200;
+// 接続元アドレスごとの同時接続数。同じ回線 (家庭・会議室) で数ルーム遊ぶ使い方は止めない
+const MAX_CONNECTIONS_PER_KEY = 20;
+// 接続元アドレスごとに、存在しないコードへの join を JOIN_FAIL_WINDOW_MS に JOIN_FAIL_MAX 種類まで受け、
+// 超えたら JOIN_BLOCK_MS の間 join を断る (コードの総当たり対策)。同じコードの失敗は1回と数えるので、
+// 再起動で消えたルームへ同じ回線の複数人が入り直しても詰まらない
+const JOIN_FAIL_WINDOW_MS = 60_000;
+const JOIN_FAIL_MAX = 10;
+const JOIN_BLOCK_MS = 60_000;
 const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
 const DOORS_BURST_WINDOW_MS = 3_000;
@@ -77,6 +85,11 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string,
   allowRequest: (req, callback) => {
     // 終了処理中は新しい接続を受けない
     if (shuttingDown) return callback('server shutting down', false);
+    // 同時接続の上限は、ここ (HTTPの握手) で断る。connectionで切ると、クライアントは自動で再接続せず戻れない
+    const addressKey = addressToKey(req.socket.remoteAddress ?? '');
+    if (addressKey && (connectionCounts.get(addressKey) ?? 0) >= MAX_CONNECTIONS_PER_KEY) {
+      return callback('too many connections', false);
+    }
     const origin = req.headers.origin;
     if (!origin) return callback(null, true);
     try {
@@ -99,6 +112,28 @@ type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<stri
 
 // ルーム作成の間隔を数える単位ごとの、最後に作った時刻
 const lastCreateAt = new Map<string, number>();
+// 接続元ごとの同時接続数
+const connectionCounts = new Map<string, number>();
+// 接続元ごとの、存在しないコードへの join の記録
+interface JoinFailures {
+  windowStart: number;
+  codes: Set<string>;
+  blockedUntil: number;
+}
+const joinFailures = new Map<string, JoinFailures>();
+function isJoinBlocked(key: string, now: number): boolean {
+  const f = joinFailures.get(key);
+  return f !== undefined && now < f.blockedUntil;
+}
+function recordJoinFailure(key: string, code: string, now: number): void {
+  let f = joinFailures.get(key);
+  if (!f || now - f.windowStart >= JOIN_FAIL_WINDOW_MS) {
+    f = { windowStart: now, codes: new Set(), blockedUntil: 0 };
+    joinFailures.set(key, f);
+  }
+  f.codes.add(code);
+  if (f.codes.size >= JOIN_FAIL_MAX) f.blockedUntil = now + JOIN_BLOCK_MS;
+}
 // IPv6は端末ごとにアドレスを変えられるので、先頭64bit (/64) にまとめて数える
 function ipv6Prefix(address: string): string {
   const [head = '', tail = ''] = address.split('::');
@@ -110,10 +145,13 @@ function ipv6Prefix(address: string): string {
   return groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':');
 }
 // 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
-function createKey(socket: GameSocket): string {
-  const address = (socket.handshake.address ?? '').replace(/^::ffff:/i, '');
-  if (!address) return `socket:${socket.id}`;
+function addressToKey(rawAddress: string): string | null {
+  const address = rawAddress.replace(/^::ffff:/i, '');
+  if (!address) return null;
   return address.includes(':') ? `v6:${ipv6Prefix(address)}` : `addr:${address}`;
+}
+function createKey(socket: GameSocket): string {
+  return addressToKey(socket.handshake.address ?? '') ?? `socket:${socket.id}`;
 }
 
 function broadcast(room: Room): void {
@@ -330,13 +368,26 @@ function isPlayerOnline(code: string, playerId: string): boolean {
 }
 
 io.on('connection', (socket: GameSocket) => {
+  // 数える単位はソケットの接続元アドレス (handshake.address) で、X-Forwarded-For などクライアントが付けられるヘッダは見ない
+  const limitKey = createKey(socket);
+  const connections = connectionCounts.get(limitKey) ?? 0;
+  if (connections >= MAX_CONNECTIONS_PER_KEY) {
+    socket.disconnect(true);
+    return;
+  }
+  connectionCounts.set(limitKey, connections + 1);
+  socket.on('disconnect', () => {
+    const left = (connectionCounts.get(limitKey) ?? 1) - 1;
+    if (left > 0) connectionCounts.set(limitKey, left);
+    else connectionCounts.delete(limitKey);
+  });
+
   socket.on('create', (p: { name?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
     if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
     const now = Date.now();
-    const limitKey = createKey(socket);
     const lastAt = lastCreateAt.get(limitKey);
     if (lastAt !== undefined && now - lastAt < CREATE_INTERVAL_MS) {
       return ack({ ok: false, error: 'ルームの作成は30秒に1回までです。少し待ってください' });
@@ -360,7 +411,16 @@ io.on('connection', (socket: GameSocket) => {
     if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const code = cleanText(p?.code, 4).toUpperCase();
     const room = rooms.get(code);
-    if (!room) return ack({ ok: false, error: 'ルームが見つかりません' });
+    const now = Date.now();
+    // 断っている間も、席の token を持つ再接続は通す
+    const isSeatHolder = room !== undefined && typeof p?.token === 'string' && room.players.some((pl) => pl.token === p.token);
+    if (!isSeatHolder && isJoinBlocked(limitKey, now)) {
+      return ack({ ok: false, error: 'ルームコードの入力が多すぎます。1分ほど待ってください', retry: true });
+    }
+    if (!room) {
+      recordJoinFailure(limitKey, code, now);
+      return ack({ ok: false, error: 'ルームが見つかりません' });
+    }
     enter(socket, room, cleanText(p?.name, LIMITS.name), p?.token, ack);
   });
 
@@ -528,6 +588,9 @@ setInterval(() => {
     }
   }
   for (const [key, at] of lastCreateAt) if (now - at >= CREATE_INTERVAL_MS) lastCreateAt.delete(key);
+  for (const [key, f] of joinFailures) {
+    if (now >= f.blockedUntil && now - f.windowStart >= JOIN_FAIL_WINDOW_MS) joinFailures.delete(key);
+  }
 }, SWEEP_INTERVAL_MS);
 
 httpServer.listen(PORT, () => {
