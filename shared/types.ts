@@ -220,7 +220,13 @@ export interface RoomView {
 export type AckResult =
   | { ok: true; code?: string; token?: string }
   /** retry: 一時的な失敗 (タイムアウト、レート制限)。セッションを残して再試行してよい */
-  | { ok: false; error: string; retry?: boolean; /** join失敗の制限中に、次に試せるまでの秒数 */ retryAfterSec?: number };
+  | {
+      ok: false;
+      error: string;
+      retry?: boolean;
+      /** join失敗の制限中に、次に試せるまでの秒数 */
+      retryAfterSec?: number;
+    };
 export type Ack = (res: AckResult) => void;
 
 /** サーバが終了する直前に全員へ送る `shutdown` イベントの内容 */
