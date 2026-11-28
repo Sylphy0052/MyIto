@@ -87,7 +87,7 @@ function ipv6Prefix(address: string): string {
 }
 // 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
 function createKey(socket: GameSocket): string {
-  const address = (socket.handshake.address ?? '').replace(/^::ffff:/, '');
+  const address = (socket.handshake.address ?? '').replace(/^::ffff:/i, '');
   if (!address) return `socket:${socket.id}`;
   return address.includes(':') ? `v6:${ipv6Prefix(address)}` : `addr:${address}`;
 }
