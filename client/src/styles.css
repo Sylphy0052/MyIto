@@ -162,6 +162,17 @@ textarea::placeholder {
   margin-bottom: var(--sp-2);
 }
 
+/* サーバの終了告知。再接続中の.bannerと見分けられるよう、色と枠を変える */
+.shutdown-notice {
+  background: var(--ng);
+  color: #2a0a0a;
+  font-weight: 700;
+  padding: var(--sp-3) var(--sp-4);
+  border: 2px solid var(--ng-ink);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-2);
+}
+
 .toast {
   position: fixed;
   top: var(--sp-3);
