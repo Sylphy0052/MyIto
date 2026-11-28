@@ -296,6 +296,16 @@ textarea::placeholder {
   flex: 1;
   overflow-wrap: anywhere;
 }
+.topic-text.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.topic-text.tappable {
+  cursor: pointer;
+}
 .topic-suggestions ul {
   list-style: none;
   margin: var(--sp-2) 0 0;

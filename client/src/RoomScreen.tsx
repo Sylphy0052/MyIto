@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import { isDoorsPhase, type RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
@@ -17,6 +17,52 @@ interface Props {
   view: RoomView;
   act: Act;
   onLeave: () => Promise<void>;
+}
+
+// ロビー以外ではお題を3行に省略する。省略が起きているときだけ、タップで全文と3行を切り替える
+function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  // ロビーへ戻ったときだけ3行へ戻す。ゲーム中の段階の移り変わりでは保つ
+  if (isLobby && isExpanded) setIsExpanded(false);
+  // 省略の有無は3行の状態でだけ測る。全文表示中は高さが等しくなるので、直前の判定を保つ
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || isLobby || isExpanded) return;
+    const measure = () => setIsClamped(el.scrollHeight > el.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [topic, isLobby, isExpanded]);
+  const isInteractive = !isLobby && (isClamped || isExpanded);
+  const toggle = () => setIsExpanded((prev) => !prev);
+  return (
+    <m.span
+      ref={ref}
+      className={`topic-text${isLobby || isExpanded ? '' : ' clamped'}${isInteractive ? ' tappable' : ''}`}
+      {...(isInteractive
+        ? {
+            role: 'button',
+            tabIndex: 0,
+            'aria-expanded': isExpanded,
+            onClick: toggle,
+            onKeyDown: (e: KeyboardEvent<HTMLSpanElement>) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              toggle();
+            },
+          }
+        : {})}
+      initial={{ opacity: 0, y: 14, filter: 'blur(6px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -14, filter: 'blur(6px)' }}
+      transition={{ duration: 0.25 }}
+    >
+      {topic}
+    </m.span>
+  );
 }
 
 export function RoomScreen({ view, act, onLeave }: Props) {
@@ -150,16 +196,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
       <section className="topic">
         <span className="label">{view.mode === 'doors' ? 'テーマ' : 'お題'}</span>
         <AnimatePresence mode="wait" initial={false}>
-          <m.span
-            key={view.topic}
-            className="topic-text"
-            initial={{ opacity: 0, y: 14, filter: 'blur(6px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -14, filter: 'blur(6px)' }}
-            transition={{ duration: 0.25 }}
-          >
-            {view.topic}
-          </m.span>
+          <TopicText key={view.topic} topic={view.topic} isLobby={view.phase === 'lobby'} />
         </AnimatePresence>
       </section>
 
