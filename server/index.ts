@@ -85,6 +85,11 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string,
   allowRequest: (req, callback) => {
     // 終了処理中は新しい接続を受けない
     if (shuttingDown) return callback('server shutting down', false);
+    // 同時接続の上限は、ここ (HTTPの握手) で断る。connectionで切ると、クライアントは自動で再接続せず戻れない
+    const addressKey = addressToKey(req.socket.remoteAddress ?? '');
+    if (addressKey && (connectionCounts.get(addressKey) ?? 0) >= MAX_CONNECTIONS_PER_KEY) {
+      return callback('too many connections', false);
+    }
     const origin = req.headers.origin;
     if (!origin) return callback(null, true);
     try {
@@ -140,10 +145,13 @@ function ipv6Prefix(address: string): string {
   return groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':');
 }
 // 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
-function createKey(socket: GameSocket): string {
-  const address = (socket.handshake.address ?? '').replace(/^::ffff:/i, '');
-  if (!address) return `socket:${socket.id}`;
+function addressToKey(rawAddress: string): string | null {
+  const address = rawAddress.replace(/^::ffff:/i, '');
+  if (!address) return null;
   return address.includes(':') ? `v6:${ipv6Prefix(address)}` : `addr:${address}`;
+}
+function createKey(socket: GameSocket): string {
+  return addressToKey(socket.handshake.address ?? '') ?? `socket:${socket.id}`;
 }
 
 function broadcast(room: Room): void {
