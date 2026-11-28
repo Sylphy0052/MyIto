@@ -23,12 +23,6 @@ const SWEEP_INTERVAL_MS = 60_000;
 // 接続元アドレスごとのルーム作成の間隔。1人が数回作り直す使い方は止めず、連打だけを断る。
 // 接続ごとに数えると、つなぎ直すだけで逃れられる
 const CREATE_INTERVAL_MS = 30_000;
-const lastCreateAt = new Map<string, number>();
-// 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
-function createKey(socket: GameSocket): string {
-  const address = socket.handshake.address.replace(/^::ffff:/, '');
-  return address ? `addr:${address}` : `socket:${socket.id}`;
-}
 const MAX_ROOMS = 200;
 const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
@@ -78,6 +72,25 @@ interface SocketData {
   doorsWindowCount?: number;
 }
 type GameSocket = Socket<any, any, any, SocketData>;
+
+// ルーム作成の間隔を数える単位ごとの、最後に作った時刻
+const lastCreateAt = new Map<string, number>();
+// IPv6は端末ごとにアドレスを変えられるので、先頭64bit (/64) にまとめて数える
+function ipv6Prefix(address: string): string {
+  const [head = '', tail = ''] = address.split('::');
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = address.includes('::') && tail ? tail.split(':') : [];
+  const groups = address.includes('::')
+    ? [...headGroups, ...Array<string>(8 - headGroups.length - tailGroups.length).fill('0'), ...tailGroups]
+    : headGroups;
+  return groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':');
+}
+// 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
+function createKey(socket: GameSocket): string {
+  const address = (socket.handshake.address ?? '').replace(/^::ffff:/, '');
+  if (!address) return `socket:${socket.id}`;
+  return address.includes(':') ? `v6:${ipv6Prefix(address)}` : `addr:${address}`;
+}
 
 function broadcast(room: Room): void {
   room.lastActiveAt = Date.now();
