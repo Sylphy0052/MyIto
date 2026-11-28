@@ -394,7 +394,7 @@ io.on('connection', (socket: GameSocket) => {
       const label = mode === 'doors' ? 'テーマ' : 'お題';
       room.aiBusy = true;
       room.notice = `AIが${label}を考えています...`;
-      generateTopics(sanitizeGenre(p.genre), mode)
+      generateTopics(sanitizeGenre(p.genre), mode, room.code)
         .then((topics) => {
           if (room.phase !== 'lobby' || room.mode !== mode) return;
           room.topicCandidates = topics;
