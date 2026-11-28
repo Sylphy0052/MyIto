@@ -240,3 +240,55 @@ export function isReadyToOpen(
     cards.every((c) => c.state === 'placed' || !connected.has(c.ownerId))
   );
 }
+
+/** 実行時には信用できない入力なので、フィールドは unknown で受ける */
+type Fields<K extends string = never> = { [P in K]?: unknown };
+type Empty = Record<string, never> | undefined;
+
+/** クライアントがサーバへ送るイベントの名前とペイロードの対応 */
+export interface ClientEventPayloads {
+  create: Fields<'name'>;
+  join: Fields<'code' | 'name' | 'token'>;
+  leave: Empty;
+  settings: Fields<'cardsPerPlayer'>;
+  'topic:random': Empty;
+  'topic:set': Fields<'topic'>;
+  'topic:suggest': Fields<'topic'>;
+  'topic:suggest-withdraw': Fields<'id'>;
+  'topic:dismiss': Fields<'id'>;
+  'topic:ai': Fields<'genre'>;
+  'topic:pick': Fields<'index'>;
+  start: Empty;
+  hint: Fields<'cardId' | 'hint'>;
+  place: Fields<'cardId' | 'toIndex'>;
+  unplace: Fields<'cardId'>;
+  move: Fields<'cardId' | 'toIndex'>;
+  open: Empty;
+  lobby: Empty;
+  mode: Fields<'mode'>;
+  'doors:settings': Record<string, unknown>;
+  'doors:reroll-gm': Empty;
+  'doors:answer': Record<string, unknown>;
+  'doors:propose': Record<string, unknown>;
+  'doors:approve': Fields<'id'>;
+  'doors:cancel': Fields<'id'>;
+  'doors:reply': Fields<'id' | 'reply' | 'lie'>;
+  'doors:correct': Fields<'id' | 'reply' | 'lie'>;
+  'doors:reject': Fields<'id'>;
+  'doors:extend': Record<string, unknown>;
+  'doors:extend-time': Empty;
+  'doors:ai-retry': Empty;
+  'doors:extend-request': Empty;
+}
+export type ClientEventName = keyof ClientEventPayloads;
+
+/** Socket.IO の ListenEvents (サーバ側が受ける) */
+export type ClientToServerEvents = {
+  [E in ClientEventName]: (payload: ClientEventPayloads[E], ack: Ack) => void;
+};
+
+/** Socket.IO の EmitEvents (サーバ側が送る) */
+export interface ServerToClientEvents {
+  state: (view: RoomView) => void;
+  shutdown: (notice: ShutdownNotice) => void;
+}
