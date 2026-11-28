@@ -84,7 +84,15 @@ export interface GameEngine {
   drawsGmInLobby(): boolean;
   /** ラウンドを始める。始められなければ GameError */
   start(seated: readonly Player[]): void;
-  /** 片付け。動いているタイマーを全て止める */
+  /** 動いているタイマーを全て止める。ラウンドの状態は残す */
+  stopTimers(): void;
+  /** ロビーへ戻る。タイマーを止め、ラウンドの状態を捨てる */
+  reset(): void;
+  /** ラウンドの進み具合に合わせて、締切のタイマーを付け直す。締切の無い種別は何もしない */
+  syncTimer(): void;
+  /** playing から結果へ向けて、めくり (オープン) を始める。onStep は1枚めくるたびに呼ぶ。できない種別は GameError */
+  open(intervalMs: number, onStep: () => void): void;
+  /** 片付け。ルームを捨てる前に呼ぶ。動いているタイマーを全て止める */
   dispose(): void;
 }
 
@@ -128,15 +136,15 @@ class ItoEngine implements GameEngine {
     room.phase = 'playing';
   }
 
-  /** 左から1枚ずつめくる。onStep は1枚めくるたびに呼ぶ */
-  reveal(intervalMs: number, onStep: () => void): void {
+  /** 左から1枚ずつめくる */
+  open(intervalMs: number, onStep: () => void): void {
     const room = this.room;
     room.phase = 'revealing';
     room.revealed = 0;
     this.revealTimer = setInterval(() => {
       room.revealed += 1;
       if (room.revealed >= room.order.length) {
-        this.stopReveal();
+        this.stopTimers();
         room.phase = 'result';
       }
       try {
@@ -147,13 +155,19 @@ class ItoEngine implements GameEngine {
     }, intervalMs);
   }
 
-  stopReveal(): void {
+  stopTimers(): void {
     if (this.revealTimer) clearInterval(this.revealTimer);
     this.revealTimer = null;
   }
 
+  reset(): void {
+    this.stopTimers();
+  }
+
+  syncTimer(): void {}
+
   dispose(): void {
-    this.stopReveal();
+    this.stopTimers();
   }
 }
 
@@ -205,9 +219,16 @@ export class Room {
     return this.doorsEngine.round;
   }
 
-  /** ルームを捨てる前の片付け。動いているタイマーを全て止める */
-  dispose(): void {
+  /** 今のゲーム種別のエンジンへ切り替える。出ていくエンジンは必ず片付ける (切替の経路はここだけ) */
+  private useEngine(next: GameEngine): void {
+    if (next === this.engine) return;
     this.engine.dispose();
+    this.engine = next;
+  }
+
+  /** ルームを捨てる前の片付け。全エンジンのタイマーを止めるので、切替の経路によらず取り残さない */
+  dispose(): void {
+    for (const e of Object.values(this.engines)) e.dispose();
   }
 
   // ---- 参加 ----
@@ -284,7 +305,7 @@ export class Room {
     if (gm && (gm.connected || now - (gm.awaySince ?? now) < GM_GRACE_MS)) return false;
     this.doors.abort('GMが30秒以上切断しました');
     this.phase = this.doors.phase;
-    this.doorsEngine.stopTimer();
+    this.engine.stopTimers();
     return true;
   }
 
@@ -405,9 +426,7 @@ export class Room {
     if (mode !== 'ito' && mode !== 'doors') throw new GameError('ゲームの種類が正しくありません');
     const next = this.engines[mode];
     if (next === this.engine) return;
-    // ロビーでは前の種別のタイマーは要らない。止めておけば、ルームの片付けは今のエンジンだけで済む
-    this.engine.dispose();
-    this.engine = next;
+    this.useEngine(next);
     this.topicCandidates = [];
     this.topicSuggestions = [];
     this.topic = next.randomTopic();
@@ -470,7 +489,7 @@ export class Room {
 
   /** 質問・最終解答の段階の締切に合わせて、10の扉のタイマーを付け直す */
   syncDoorsTimer(): void {
-    this.doorsEngine.syncTimer();
+    this.engine.syncTimer();
   }
 
   /** 10の扉の操作を実行し、ラウンドのフェーズを部屋へ写す */
@@ -508,11 +527,10 @@ export class Room {
     if (this.doors?.isRunning) {
       this.doors.abort('ホストが中止しました');
       this.phase = this.doors.phase;
-      this.doorsEngine.stopTimer();
+      this.engine.stopTimers();
       return;
     }
-    this.ito.stopReveal();
-    this.doorsEngine.round = null;
+    this.engine.reset();
     this.phase = 'lobby';
     this.cards = [];
     this.order = [];
@@ -532,7 +550,7 @@ export class Room {
   failAiAnswer(round: DoorsRound): void {
     round.endAiAnswer();
     if (this.doors !== round || round.phase !== 'doors-setup') return;
-    this.doorsEngine.round = null;
+    this.engine.reset();
     this.phase = 'lobby';
     this.notice = 'AIが答えを決められなかったので、ロビーに戻りました。もう一度開始してください';
   }
@@ -589,7 +607,7 @@ export class Room {
     if (absent.length > 0) {
       this.notice = `${absent.map((p) => p.name).join('、')} さんが不在のため、列に置かれていない手札は答え合わせに含めません`;
     }
-    this.ito.reveal(intervalMs, onStep);
+    this.engine.open(intervalMs, onStep);
   }
 
   // ---- 表示 ----

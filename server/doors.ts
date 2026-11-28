@@ -864,7 +864,7 @@ export class DoorsEngine implements GameEngine {
 
   /** 質問・最終解答の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
   syncTimer(): void {
-    this.stopTimer();
+    this.stopTimers();
     const round = this.round;
     if (!round) return;
     const deadline = round.nextDeadline();
@@ -884,12 +884,21 @@ export class DoorsEngine implements GameEngine {
     }, Math.max(1, deadline - Date.now()));
   }
 
-  stopTimer(): void {
+  stopTimers(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
   }
 
+  reset(): void {
+    this.stopTimers();
+    this.round = null;
+  }
+
+  open(): void {
+    throw new GameError('いまはオープンできません');
+  }
+
   dispose(): void {
-    this.stopTimer();
+    this.stopTimers();
   }
 }
