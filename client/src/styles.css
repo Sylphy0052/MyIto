@@ -1574,3 +1574,12 @@ button.ai-busy {
 .bgm-volume select {
   min-height: auto;
 }
+
+/* 切断中は部屋の操作を一括で無効にする。レイアウトには影響させない */
+.room-controls {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}

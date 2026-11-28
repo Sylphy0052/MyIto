@@ -148,6 +148,7 @@ export function App() {
           <m.div
             key="banner"
             className="banner"
+            role="status"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -175,7 +176,7 @@ export function App() {
       <AnimatePresence mode="wait">
         {view ? (
           <ScreenPanel key="room" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <RoomScreen view={view} act={act} onLeave={leave} />
+            <RoomScreen view={view} act={act} onLeave={leave} connected={connected} />
           </ScreenPanel>
         ) : (
           <ScreenPanel key="entry" exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}>
