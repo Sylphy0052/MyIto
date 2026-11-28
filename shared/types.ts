@@ -235,10 +235,7 @@ export function isReadyToOpen(
   players: readonly { id: string; connected: boolean }[],
 ): boolean {
   const connected = new Set(players.filter((p) => p.connected).map((p) => p.id));
-  return (
-    cards.some((c) => c.state === 'placed') &&
-    cards.every((c) => c.state === 'placed' || !connected.has(c.ownerId))
-  );
+  return cards.some((c) => c.state === 'placed') && cards.every((c) => c.state === 'placed' || !connected.has(c.ownerId));
 }
 
 /** 実行時には信用できない入力なので、フィールドは unknown で受ける */

@@ -24,7 +24,9 @@ export function SuggestForm({ view, act }: Pick<Props, 'view' | 'act'>) {
   };
   return (
     <div className="suggest-form">
-      <p className="muted">{label}の案を送る (あと{left}件送れます)</p>
+      <p className="muted">
+        {label}の案を送る (あと{left}件送れます)
+      </p>
       <div className="field-row">
         <input
           placeholder={`${label}の案`}
@@ -63,9 +65,7 @@ export function TopicSuggestions({ view, isHost, act, onUse, onAsk }: Props) {
                   <button onClick={() => void act('topic:dismiss', { id: s.id })}>却下</button>
                 </>
               )}
-              {s.authorId === view.you && (
-                <button onClick={() => void act('topic:suggest-withdraw', { id: s.id })}>取り下げ</button>
-              )}
+              {s.authorId === view.you && <button onClick={() => void act('topic:suggest-withdraw', { id: s.id })}>取り下げ</button>}
             </span>
           </li>
         ))}

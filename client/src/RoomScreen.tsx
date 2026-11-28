@@ -76,14 +76,12 @@ function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
 export function RoomScreen({ view, act, onLeave, connected }: Props) {
   const isHost = view.you === view.hostId;
   const isDoorsRound = isDoorsPhase(view.phase);
-  const nameOf = useCallback(
-    (id: string) => view.players.find((p) => p.id === id)?.name ?? '?',
-    [view.players],
-  );
+  const nameOf = useCallback((id: string) => view.players.find((p) => p.id === id)?.name ?? '?', [view.players]);
   const myCards = view.cards.filter((c) => c.ownerId === view.you).sort((a, b) => (a.value ?? 0) - (b.value ?? 0));
-  const canRecover = view.phase === 'playing' && isHost && !view.cards.some((card) =>
-    view.players.some((player) => player.id === card.ownerId && player.connected),
-  );
+  const canRecover =
+    view.phase === 'playing' &&
+    isHost &&
+    !view.cards.some((card) => view.players.some((player) => player.id === card.ownerId && player.connected));
   const onHint = useCallback((cardId: string, hint: string) => act('hint', { cardId, hint }), [act]);
   const isPerfect = useMemo(() => {
     return view.phase === 'result' && isPerfectOrder(view);
@@ -229,7 +227,10 @@ export function RoomScreen({ view, act, onLeave, connected }: Props) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: flow.isDealing ? myCards.length * DEAL_INTERVAL_S + 0.2 : 0 }}
           >
-            あなたの数字: {myCards.map((c) => <strong key={c.id}>{c.value}</strong>)}
+            あなたの数字:{' '}
+            {myCards.map((c) => (
+              <strong key={c.id}>{c.value}</strong>
+            ))}
           </m.section>
         )}
 
@@ -243,11 +244,19 @@ export function RoomScreen({ view, act, onLeave, connected }: Props) {
           </m.div>
         ) : isDoorsRound && view.doors ? (
           <m.div key="doors" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-            <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Doors view={view} isHost={isHost} act={act} /></Suspense></ChunkErrorBoundary>
+            <ChunkErrorBoundary>
+              <Suspense fallback={<GameLoading />}>
+                <Doors view={view} isHost={isHost} act={act} />
+              </Suspense>
+            </ChunkErrorBoundary>
           </m.div>
         ) : (
           <m.div key="board" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-            <ChunkErrorBoundary><Suspense fallback={<GameLoading />}><Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} /></Suspense></ChunkErrorBoundary>
+            <ChunkErrorBoundary>
+              <Suspense fallback={<GameLoading />}>
+                <Board view={view} isHost={isHost} nameOf={nameOf} act={act} onHint={onHint} isDealing={flow.isDealing} />
+              </Suspense>
+            </ChunkErrorBoundary>
           </m.div>
         )}
 

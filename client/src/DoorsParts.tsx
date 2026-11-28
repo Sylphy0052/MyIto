@@ -109,7 +109,9 @@ export function DoorRow({ doors, isFinal }: { doors: DoorsView; isFinal: boolean
             </m.strong>
           </AnimatePresence>
         </span>
-        <span className="muted">/ {doors.limit} 回 {isFinal && '(最終解答)'}</span>
+        <span className="muted">
+          / {doors.limit} 回 {isFinal && '(最終解答)'}
+        </span>
       </div>
     );
   }

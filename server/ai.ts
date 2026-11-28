@@ -128,9 +128,7 @@ function askConfigProblems(): string[] {
   return [
     ASK_API_KEY.length === 0 && 'ASK_API_KEY is empty',
     !(Number.isInteger(ASK_PROJECT_ID) && ASK_PROJECT_ID > 0) && 'ASK_PROJECT_ID must be a positive integer',
-    ASK_API_URL.length === 0
-      ? 'ASK_API_URL is empty'
-      : !isSafeAskUrl(ASK_API_URL) && 'ASK_API_URL must be https (http only for localhost)',
+    ASK_API_URL.length === 0 ? 'ASK_API_URL is empty' : !isSafeAskUrl(ASK_API_URL) && 'ASK_API_URL must be https (http only for localhost)',
   ].filter((p): p is string => typeof p === 'string');
 }
 
@@ -268,7 +266,10 @@ export function isAskConfigured(): boolean {
 
 /** 再試行してよい失敗か。5xx と 429 だけ。タイムアウトと他の 4xx は再試行しない */
 class RetryableAskError extends Error {
-  constructor(message: string, readonly delayMs: number) {
+  constructor(
+    message: string,
+    readonly delayMs: number,
+  ) {
     super(message);
   }
 }

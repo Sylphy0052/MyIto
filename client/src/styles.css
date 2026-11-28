@@ -43,7 +43,7 @@
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.35);
 
-  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic UI', sans-serif;
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
   font-size: 16px;
   line-height: 1.6;
   color: var(--text);
@@ -697,7 +697,7 @@ button.shine {
   overflow: hidden;
 }
 button.shine::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
@@ -857,7 +857,12 @@ button.primary.ready::after {
   perspective: 600px;
 }
 button.ai-busy {
-  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--accent) 40%, var(--surface-2)) 50%, var(--surface-2) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--accent) 40%, var(--surface-2)) 50%,
+    var(--surface-2) 75%
+  );
   background-size: 200% 100%;
   animation: busy-shimmer 1.2s linear infinite;
   opacity: 0.85;
@@ -870,7 +875,12 @@ button.ai-busy {
 /* AI GMの考え中。ボタンの ai-busy と同じ光の流れを枠に掛ける */
 .busy-shimmer,
 .active-item.busy-shimmer {
-  background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--accent) 30%, var(--surface-2)) 50%, var(--surface-2) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 25%,
+    color-mix(in srgb, var(--accent) 30%, var(--surface-2)) 50%,
+    var(--surface-2) 75%
+  );
   background-size: 200% 100%;
 }
 .busy-shimmer {
@@ -1096,7 +1106,7 @@ button.ai-busy {
   transform-origin: left center;
 }
 .door::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 3px;
   top: 50%;
@@ -1118,7 +1128,7 @@ button.ai-busy {
   box-shadow: var(--shadow-sm);
 }
 .waiting-door::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 5px;
   top: 50%;
@@ -1538,7 +1548,9 @@ button.ai-busy {
   font-weight: 700;
   line-height: 1;
   color: var(--text, #333);
-  text-shadow: 0 0 4px #fff, 0 0 4px #fff;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 4px #fff;
   pointer-events: none;
 }
 @media (max-width: 720px) {

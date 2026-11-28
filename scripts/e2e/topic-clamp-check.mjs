@@ -7,8 +7,17 @@ const base = process.argv[2] ?? 'http://localhost:47302';
 const out = process.argv[3] ?? './shots-topic';
 mkdirSync(out, { recursive: true });
 
-const LONG = 'あ'.repeat(10) + 'い'.repeat(10) + 'う'.repeat(10) + 'え'.repeat(10) + 'お'.repeat(10) +
-  'か'.repeat(10) + 'き'.repeat(10) + 'く'.repeat(10) + 'け'.repeat(10) + 'こ'.repeat(10);
+const LONG =
+  'あ'.repeat(10) +
+  'い'.repeat(10) +
+  'う'.repeat(10) +
+  'え'.repeat(10) +
+  'お'.repeat(10) +
+  'か'.repeat(10) +
+  'き'.repeat(10) +
+  'く'.repeat(10) +
+  'け'.repeat(10) +
+  'こ'.repeat(10);
 const SHORT = 'ねこのなまえ十字';
 
 const browser = await launchChrome();
@@ -60,13 +69,16 @@ const settle = async (page) => {
 
 // リサイズ後のレイアウトが反映され、行数が [min, max] に入るまで待つ (アニメ状態だけでは再描画を待てない)
 const waitLines = (page, min, max) =>
-  page.waitForFunction(([lo, hi]) => {
-    const el = document.querySelector('.topic-text');
-    if (!el) return false;
-    const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5;
-    const lines = Math.round(el.getBoundingClientRect().height / lh);
-    return lines >= lo && lines <= hi;
-  }, [min, max]);
+  page.waitForFunction(
+    ([lo, hi]) => {
+      const el = document.querySelector('.topic-text');
+      if (!el) return false;
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5;
+      const lines = Math.round(el.getBoundingClientRect().height / lh);
+      return lines >= lo && lines <= hi;
+    },
+    [min, max],
+  );
 
 async function openRoom(topic, mode) {
   const host = await newClient('ホスト');
@@ -169,7 +181,10 @@ async function openRoom(topic, mode) {
 
   await host.locator('input[placeholder^="答え"]').fill('ペンギン');
   await host.getByRole('button', { name: '確定' }).click();
-  await host.getByText(/残り\s*10\s*\/\s*10/).first().waitFor({ timeout: 5000 });
+  await host
+    .getByText(/残り\s*10\s*\/\s*10/)
+    .first()
+    .waitFor({ timeout: 5000 });
   await settle(host);
   check('10の扉 段階が進んでも全文表示を保つ', (await metrics(host)).expanded === 'true');
 

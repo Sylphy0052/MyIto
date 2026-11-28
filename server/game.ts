@@ -53,7 +53,10 @@ interface Card {
 
 export function cleanText(raw: unknown, max: number): string {
   if (typeof raw !== 'string') return '';
-  return raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+  return raw
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, max);
 }
 
 /** 0 以上 max 以下の整数か。Number() を通さず、null や true を位置として受け付けない */
@@ -180,7 +183,15 @@ export class Room {
   private readonly engines: Readonly<Record<GameMode, GameEngine>> = { ito: this.ito, doors: this.doorsEngine };
   /** 今のゲーム種別のエンジン。切り替えるのはロビーでだけ */
   private engine: GameEngine = this.ito;
-  doorsSettings: DoorsSettings = { gmPick: 'random', gmId: '', questions: DOORS_DEFAULT_QUESTIONS, maxLies: 0, timeLimitMin: 0, turnLimitSec: 0, aiModel: DOORS_MODEL };
+  doorsSettings: DoorsSettings = {
+    gmPick: 'random',
+    gmId: '',
+    questions: DOORS_DEFAULT_QUESTIONS,
+    maxLies: 0,
+    timeLimitMin: 0,
+    turnLimitSec: 0,
+    aiModel: DOORS_MODEL,
+  };
   /** 直前のラウンドのGM。ランダムで続けて当たらないようにする */
   lastGmId = '';
   /** GMがランダムのとき、ロビーで先に引いておいた次のGM。開始時はこの人がGMになる */
@@ -192,7 +203,7 @@ export class Room {
   topicSource: TopicSource = 'random';
   topicCandidates: string[] = [];
   /** ホスト以外が送ったお題の案 */
-  topicSuggestions: (TopicSuggestionView)[] = [];
+  topicSuggestions: TopicSuggestionView[] = [];
   /** 案を最後に送った時刻 (playerId ごと) */
   private lastSuggestAt = new Map<string, number>();
   aiBusy = false;

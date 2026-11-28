@@ -240,8 +240,7 @@ export class DoorsRound {
     this.syncTotal();
     if (this.turnLimitMs <= 0) return;
     const now = Date.now();
-    const isCounting =
-      this.phase === 'doors-asking' && !this.isTimeUp && !this.proposals.some((p) => p.status === 'sent' && !p.isFinal);
+    const isCounting = this.phase === 'doors-asking' && !this.isTimeUp && !this.proposals.some((p) => p.status === 'sent' && !p.isFinal);
     if (this.phase !== 'doors-asking' || this.isTimeUp) {
       // 数えない段階。動いていた分は残りとして取っておく (延長・戻しで満タンにするのは呼び出し側)
       if (this.turnDeadlineAt > 0) this.turnLeftMs = Math.max(0, this.turnDeadlineAt - now);
@@ -869,19 +868,22 @@ export class DoorsEngine implements GameEngine {
     if (!round) return;
     const deadline = round.nextDeadline();
     if (deadline <= 0) return;
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      // 別のラウンドに替わっていたり、質問・最終解答の段階でなくなっていたりしたら何もしない
-      if (this.round !== round || (round.phase !== 'doors-asking' && round.phase !== 'doors-final')) return;
-      if (!round.fireDeadline()) return this.syncTimer();
-      this.room.phase = round.phase;
-      this.syncTimer();
-      try {
-        this.room.onDoorsTimeUp?.();
-      } catch (e) {
-        console.error('doors time-up broadcast failed', e);
-      }
-    }, Math.max(1, deadline - Date.now()));
+    this.timer = setTimeout(
+      () => {
+        this.timer = null;
+        // 別のラウンドに替わっていたり、質問・最終解答の段階でなくなっていたりしたら何もしない
+        if (this.round !== round || (round.phase !== 'doors-asking' && round.phase !== 'doors-final')) return;
+        if (!round.fireDeadline()) return this.syncTimer();
+        this.room.phase = round.phase;
+        this.syncTimer();
+        try {
+          this.room.onDoorsTimeUp?.();
+        } catch (e) {
+          console.error('doors time-up broadcast failed', e);
+        }
+      },
+      Math.max(1, deadline - Date.now()),
+    );
   }
 
   stopTimers(): void {

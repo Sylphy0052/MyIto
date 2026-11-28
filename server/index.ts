@@ -6,7 +6,14 @@ import { fileURLToPath } from 'node:url';
 import compression from 'compression';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { LIMITS, type Ack, type ClientToServerEvents, type DoorsAiModel, type ServerToClientEvents, type ShutdownNotice } from '../shared/types';
+import {
+  LIMITS,
+  type Ack,
+  type ClientToServerEvents,
+  type DoorsAiModel,
+  type ServerToClientEvents,
+  type ShutdownNotice,
+} from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { AiLimitError, acquireAiSlot, generateTopics, releaseRoomAiSlots, sanitizeGenre } from './ai';
@@ -153,7 +160,10 @@ function ipv6Prefix(address: string): string {
   const groups = address.includes('::')
     ? [...headGroups, ...Array<string>(8 - headGroups.length - tailGroups.length).fill('0'), ...tailGroups]
     : headGroups;
-  return groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':');
+  return groups
+    .slice(0, 4)
+    .map((g) => g.toLowerCase().replace(/^0+(?=.)/, ''))
+    .join(':');
 }
 // 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
 function addressToKey(rawAddress: string): string | null {
@@ -518,29 +528,51 @@ io.on('connection', (socket: GameSocket) => {
     'topic:pick',
     withRoom(socket, (room, pid, p) => room.pickCandidate(pid, p.index)),
   );
-  socket.on('start', withRoom(socket, (room, pid) => room.start(pid)));
+  socket.on(
+    'start',
+    withRoom(socket, (room, pid) => room.start(pid)),
+  );
   socket.on(
     'hint',
     withRoom(socket, (room, pid, p) => room.setHint(pid, p.cardId, cleanText(p.hint, LIMITS.hint))),
   );
-  socket.on('place', withRoom(socket, (room, pid, p) => room.place(pid, p.cardId, p.toIndex)));
-  socket.on('unplace', withRoom(socket, (room, pid, p) => room.unplace(pid, p.cardId)));
-  socket.on('move', withRoom(socket, (room, _pid, p) => room.move(p.cardId, p.toIndex)));
+  socket.on(
+    'place',
+    withRoom(socket, (room, pid, p) => room.place(pid, p.cardId, p.toIndex)),
+  );
+  socket.on(
+    'unplace',
+    withRoom(socket, (room, pid, p) => room.unplace(pid, p.cardId)),
+  );
+  socket.on(
+    'move',
+    withRoom(socket, (room, _pid, p) => room.move(p.cardId, p.toIndex)),
+  );
   socket.on(
     'open',
     withRoom(socket, (room, pid) => room.open(pid, REVEAL_INTERVAL_MS, () => broadcast(room))),
   );
-  socket.on('lobby', withRoom(socket, (room, pid) => room.backToLobby(pid)));
+  socket.on(
+    'lobby',
+    withRoom(socket, (room, pid) => room.backToLobby(pid)),
+  );
 
   // ---- 10の扉 ----
-  socket.on('mode', withRoom(socket, (room, pid, p) => room.setMode(pid, p.mode)));
-  socket.on('doors:settings', withRoom(socket, (room, pid, p) => room.setDoorsSettings(pid, p)));
-  socket.on('doors:reroll-gm', withRoom(socket, (room, pid) => room.rerollGm(pid)));
+  socket.on(
+    'mode',
+    withRoom(socket, (room, pid, p) => room.setMode(pid, p.mode)),
+  );
+  socket.on(
+    'doors:settings',
+    withRoom(socket, (room, pid, p) => room.setDoorsSettings(pid, p)),
+  );
+  socket.on(
+    'doors:reroll-gm',
+    withRoom(socket, (room, pid) => room.rerollGm(pid)),
+  );
   socket.on(
     'doors:answer',
-    withRoom(socket, (room, pid, p) =>
-      room.doorsAction((d) => d.setAnswer(pid, cleanText(p.answer, LIMITS.doorsAnswer))),
-    ),
+    withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.setAnswer(pid, cleanText(p.answer, LIMITS.doorsAnswer)))),
   );
   /** 提案・承認・取り消しは連打されやすいので、全体の上限に加えて専用の上限を掛ける */
   const burst = (fn: (room: Room, pid: string, p: Payload) => void) =>
@@ -550,12 +582,16 @@ io.on('connection', (socket: GameSocket) => {
     });
   socket.on(
     'doors:propose',
-    burst((room, pid, p) =>
-      room.doorsAction((d, seats) => d.propose(pid, seats, p.kind, cleanText(p.text, LIMITS.doorsProposal))),
-    ),
+    burst((room, pid, p) => room.doorsAction((d, seats) => d.propose(pid, seats, p.kind, cleanText(p.text, LIMITS.doorsProposal)))),
   );
-  socket.on('doors:approve', burst((room, pid, p) => room.doorsAction((d, seats) => d.approve(pid, seats, p.id))));
-  socket.on('doors:cancel', burst((room, pid, p) => room.doorsAction((d, seats) => d.cancel(pid, seats, p.id))));
+  socket.on(
+    'doors:approve',
+    burst((room, pid, p) => room.doorsAction((d, seats) => d.approve(pid, seats, p.id))),
+  );
+  socket.on(
+    'doors:cancel',
+    burst((room, pid, p) => room.doorsAction((d, seats) => d.cancel(pid, seats, p.id))),
+  );
   socket.on(
     'doors:reply',
     withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.reply(pid, p.id, p.reply, p.lie))),
@@ -564,12 +600,13 @@ io.on('connection', (socket: GameSocket) => {
     'doors:correct',
     withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.correct(pid, p.id, p.reply, p.lie))),
   );
-  socket.on('doors:reject', withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.reject(pid, p.id))));
+  socket.on(
+    'doors:reject',
+    withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.reject(pid, p.id))),
+  );
   socket.on(
     'doors:extend',
-    withRoom(socket, (room, pid, p) =>
-      room.doorsAction((d) => d.extend(pid === room.hostId || pid === d.gmId, p.delta)),
-    ),
+    withRoom(socket, (room, pid, p) => room.doorsAction((d) => d.extend(pid === room.hostId || pid === d.gmId, p.delta))),
   );
   socket.on(
     'doors:extend-time',

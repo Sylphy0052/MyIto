@@ -15,9 +15,7 @@ export function SetupPhase({ view, isGm, isHost, act }: { view: RoomView; isGm: 
       ) : isGm ? (
         <>
           <h3>あなたがGMです</h3>
-          <p>
-            テーマ「{view.topic}」に沿った答えを1つ決めて確定してください。確定するまで質問は始まりません。
-          </p>
+          <p>テーマ「{view.topic}」に沿った答えを1つ決めて確定してください。確定するまで質問は始まりません。</p>
           <form
             className="field-row"
             onSubmit={(e) => {
@@ -40,9 +38,7 @@ export function SetupPhase({ view, isGm, isHost, act }: { view: RoomView; isGm: 
       ) : (
         <WaitingDoors text="GMが答えを考え中" />
       )}
-      {isHost && (
-        <p className="muted">{doors.isAiGm ? 'AI' : 'GM'}の答えを待つ間も、ホストは下のボタンでロビーへ戻せます。</p>
-      )}
+      {isHost && <p className="muted">{doors.isAiGm ? 'AI' : 'GM'}の答えを待つ間も、ホストは下のボタンでロビーへ戻せます。</p>}
     </section>
   );
 }

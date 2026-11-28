@@ -75,7 +75,9 @@ export function Doors({ view, isHost, act }: Props) {
           {(view.phase === 'doors-asking' || view.phase === 'doors-final') && (
             <PlayPhase view={view} doors={doors} isGm={isGm} isHost={isHost} act={act} />
           )}
-          {view.phase === 'doors-result' && <DoorsResult view={view} doors={doors} isHost={isHost} act={act} isJustFinished={flow.isJustFinished} />}
+          {view.phase === 'doors-result' && (
+            <DoorsResult view={view} doors={doors} isHost={isHost} act={act} isJustFinished={flow.isJustFinished} />
+          )}
         </m.div>
       </AnimatePresence>
 
