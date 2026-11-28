@@ -8,7 +8,7 @@ const failedOnce = new Set();
 
 function reply(res, obj) {
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
-  res.write(JSON.stringify({ type: 'add_message_token', token: JSON.stringify(obj) }) + '\n');
+  res.write(`${JSON.stringify({ type: 'add_message_token', token: JSON.stringify(obj) })}\n`);
   res.end();
 }
 
@@ -60,7 +60,7 @@ http
         }
         // 上のどれでもなければ、お題の候補として返す (ロビーのお題生成)
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
-        res.write(JSON.stringify({ type: 'add_message_token', token: '朝の眠気の強さ\n' }) + '\n');
+        res.write(`${JSON.stringify({ type: 'add_message_token', token: '朝の眠気の強さ\n' })}\n`);
         res.end();
       }, 600);
     });

@@ -32,7 +32,7 @@ const server = http.createServer((req, res) => {
       () => {
         active--;
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
-        res.end(JSON.stringify({ type: 'add_message_token', token: 'ok\n' }) + '\n');
+        res.end(`${JSON.stringify({ type: 'add_message_token', token: 'ok\n' })}\n`);
       },
       mode === 'slow' ? 800 : 10,
     );
@@ -49,7 +49,7 @@ const reset = (m) => {
   mode = m;
 };
 
-console.log('--- 1. 同時実行の上限 (上限 ' + ai.MAX_CONCURRENT_CALLS + ', 6件を同時に送る) ---');
+console.log(`--- 1. 同時実行の上限 (上限 ${ai.MAX_CONCURRENT_CALLS}, 6件を同時に送る) ---`);
 reset('slow');
 const rs = await Promise.allSettled(Array.from({ length: 6 }, () => ask()));
 rs.forEach((r, i) => log(`#${i} ${r.status}${r.status === 'rejected' ? ` ${r.reason.constructor.name}: ${r.reason.message}` : ''}`));
@@ -65,7 +65,6 @@ log(`完了後の再呼出: ${after} (枠が戻っている)`);
 console.log('--- 2. 再試行 ---');
 for (const m of ['5xx-once', '429-once', '400']) {
   reset(m);
-  const s = Date.now();
   const r = await ask().then(
     () => 'success',
     (e) => `failed: ${e.message}`,
