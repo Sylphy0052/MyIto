@@ -135,7 +135,7 @@ function* roomSockets(code: string): Generator<GameSocket> {
   const ids = io.sockets.adapter.rooms.get(code);
   if (!ids) return;
   for (const id of ids) {
-    const s = io.sockets.sockets.get(id) as GameSocket | undefined;
+    const s = io.sockets.sockets.get(id);
     if (s) yield s;
   }
 }
