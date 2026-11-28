@@ -40,3 +40,17 @@ export function gmCueFor(doors: DoorsView): GmCue {
   const lastReply = doors.proposals.filter((p) => p.status === 'answered' && p.reply).at(-1)?.reply;
   return lastReply ?? 'idle';
 }
+
+const preloaded: HTMLImageElement[] = [];
+
+/** 全表情の画像を低優先度で先読みする。2回目以降は何もしない (取得済みはブラウザのキャッシュに任せる)。失敗しても何もしない */
+export function preloadGmImages(): void {
+  if (preloaded.length > 0 || typeof Image === 'undefined') return;
+  for (const expression of GM_EXPRESSIONS) {
+    const img = new Image();
+    img.fetchPriority = 'low';
+    img.decoding = 'async';
+    img.src = gmImageFor(expression);
+    preloaded.push(img);
+  }
+}

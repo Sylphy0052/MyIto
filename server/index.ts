@@ -1,8 +1,9 @@
 import './loadEnv';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import compression from 'compression';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { LIMITS, type Ack, type DoorsAiModel } from '../shared/types';
@@ -45,8 +46,23 @@ app.use((_req, res, next) => {
   next();
 });
 if (existsSync(clientDir)) {
-  app.use(express.static(clientDir));
-  app.get('/{*path}', (_req, res) => res.sendFile(join(clientDir, 'index.html')));
+  app.use(compression());
+  app.use(
+    express.static(clientDir, {
+      // 既定のETag/Last-Modifiedは残し、Cache-Controlだけ種類ごとに上書きする
+      setHeaders: (res, filePath) => {
+        const rel = relative(clientDir, filePath).split(sep);
+        if (rel[0] === 'assets') res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        else if (rel[0] === 'bgm' || rel[0] === 'gm') res.setHeader('Cache-Control', 'public, max-age=86400');
+        else if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      },
+    }),
+  );
+  app.get('/{*path}', (_req, res) => {
+    res.set('Cache-Control', 'no-cache');
+    // rootを渡すと、配置先パスの`.xxx`ディレクトリ (dotfiles判定) に影響されない
+    res.sendFile('index.html', { root: clientDir });
+  });
 }
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -378,7 +394,7 @@ io.on('connection', (socket: GameSocket) => {
       const label = mode === 'doors' ? 'テーマ' : 'お題';
       room.aiBusy = true;
       room.notice = `AIが${label}を考えています...`;
-      generateTopics(sanitizeGenre(p.genre), mode)
+      generateTopics(sanitizeGenre(p.genre), mode, room.code)
         .then((topics) => {
           if (room.phase !== 'lobby' || room.mode !== mode) return;
           room.topicCandidates = topics;
@@ -392,7 +408,10 @@ io.on('connection', (socket: GameSocket) => {
           room.topic = mode === 'doors' ? randomDoorsTheme(room.topic) : randomTopic(room.topic);
           room.topicSource = 'ai-fallback';
           room.topicCandidates = [];
-          room.notice = `AI生成に失敗したので、内蔵リストから${label}を出しました`;
+          room.notice =
+            e instanceof AiLimitError
+              ? `AIが混み合っているので、内蔵リストから${label}を出しました`
+              : `AI生成に失敗したので、内蔵リストから${label}を出しました`;
         })
         .finally(() => {
           room.aiBusy = false;

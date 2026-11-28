@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { m } from 'motion/react';
 import { isReadyToOpen, type CardView, type RoomView } from '../../shared/types';
 import { Card } from './Card';
+import { DEAL_INTERVAL_S } from './dealTiming';
 import type { Act } from './RoomScreen';
 
 interface Props {
@@ -34,8 +35,6 @@ interface Drag {
 
 const DRAG_THRESHOLD_PX = 6;
 const ROW_MARGIN_PX = 40;
-/** 配るときの1枚あたりの間隔 (秒) */
-export const DEAL_INTERVAL_S = 0.08;
 const LAYOUT_TRANSITION = { type: 'spring', stiffness: 500, damping: 40 } as const;
 
 /** めくった位置 i の正誤。左隣より大きければ正しい */
