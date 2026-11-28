@@ -221,6 +221,11 @@ export type AckResult =
   | { ok: false; error: string; retry?: boolean };
 export type Ack = (res: AckResult) => void;
 
+/** サーバが終了する直前に全員へ送る `shutdown` イベントの内容 */
+export interface ShutdownNotice {
+  reason: 'restart';
+}
+
 /**
  * オープンできるか。接続中の人のカードが全部列に置かれ、列が空でないこと。
  * 切断中の人の手札は待たない (本人しか置けず、進行が止まるため)

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import compression from 'compression';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
-import { LIMITS, type Ack, type DoorsAiModel } from '../shared/types';
+import { LIMITS, type Ack, type DoorsAiModel, type ShutdownNotice } from '../shared/types';
 import { GM_GRACE_MS, GameError, Room, cleanText, newRoomCode } from './game';
 import { randomDoorsTheme, randomTopic } from './topics';
 import { AiLimitError, acquireAiSlot, generateTopics, releaseRoomAiSlots, sanitizeGenre } from './ai';
@@ -29,7 +29,13 @@ const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
 const DOORS_BURST_WINDOW_MS = 3_000;
 const DOORS_BURST_MAX = 6;
+// 終了の告知を送ってから接続を閉じるまでの待ち。io.close()は送信待ちのデータを捨てるので、告知が届く間を空ける
+const SHUTDOWN_NOTICE_MS = 1_000;
+// 終了信号から強制終了までの上限。docker stopの既定の猶予 (10秒) より短くする
+const SHUTDOWN_FORCE_EXIT_MS = 5_000;
 
+/** 終了信号を受けた後か。二重の終了処理を防ぎ、新しい接続を断る */
+let shuttingDown = false;
 const rooms = new Map<string, Room>();
 /** 一度でもロビーを出たルームのコード。ルームを消すときに一緒に消す */
 const playedRooms = new Set<string>();
@@ -69,6 +75,8 @@ const io = new Server(httpServer, {
   maxHttpBufferSize: 16 * 1024,
   // 他サイトのページからの接続を断る
   allowRequest: (req, callback) => {
+    // 終了処理中は新しい接続を受けない
+    if (shuttingDown) return callback('server shutting down', false);
     const origin = req.headers.origin;
     if (!origin) return callback(null, true);
     try {
@@ -513,3 +521,30 @@ setInterval(() => {
 httpServer.listen(PORT, () => {
   console.log(`ito server listening on :${PORT}`);
 });
+
+/** 終了信号を受けたら全員へ告知し、少し待ってから接続を閉じて終える。ルームはメモリ上にしか無いので消える */
+function shutdown(signal: NodeJS.Signals): void {
+  if (shuttingDown) {
+    // 開発時のCtrl+C2回は待たずに即終了する。SIGTERMの重複は従来どおり無視
+    if (signal === 'SIGINT') process.exit(1);
+    return;
+  }
+  shuttingDown = true;
+  console.log(`received ${signal}: notifying ${io.engine.clientsCount} clients and shutting down`);
+  const notice: ShutdownNotice = { reason: 'restart' };
+  io.emit('shutdown', notice);
+  // 閉じる処理が終わらなくても、docker stopの猶予内に終える
+  setTimeout(() => {
+    // 終了コード1は「正常に閉じられず強制終了した」異常終了を示す意図どおりの値
+    console.error('shutdown timed out; exiting');
+    process.exit(1);
+  }, SHUTDOWN_FORCE_EXIT_MS).unref();
+  setTimeout(() => {
+    void io.close(() => {
+      console.log('shutdown complete');
+      process.exit(0);
+    });
+  }, SHUTDOWN_NOTICE_MS);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
