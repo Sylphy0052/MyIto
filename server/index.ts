@@ -658,9 +658,9 @@ function shutdown(signal: NodeJS.Signals): void {
   io.emit('shutdown', notice);
   // 閉じる処理が終わらなくても、docker stopの猶予内に終える
   setTimeout(() => {
-    // 終了コード1は「正常に閉じられず強制終了した」異常終了を示す意図どおりの値
-    console.error('shutdown timed out; exiting');
-    process.exit(1);
+    // docker stopの通常の入れ替えで閉じ切れなくても異常終了扱いにしないため、終了コードは0
+    console.log('shutdown timed out; exiting with code 0');
+    process.exit(0);
   }, SHUTDOWN_FORCE_EXIT_MS).unref();
   setTimeout(() => {
     void io.close(() => {
