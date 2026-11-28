@@ -49,7 +49,13 @@ const rooms = new Map<string, Room>();
 const playedRooms = new Set<string>();
 
 const app = express();
-const clientDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'client');
+// 画面ファイルの場所。ビルド済みJS (dist/server/index.js) からは隣の dist/client、
+// 開発時 (tsx server/index.ts) は repo ルートの dist/client を見る。
+// ソースの隣の client/ はviteの元ファイルなので、存在の有無ではなく実行中のファイルの種類で分ける
+const serverFile = fileURLToPath(import.meta.url);
+const clientDir = serverFile.endsWith('.ts')
+  ? join(dirname(serverFile), '..', 'dist', 'client')
+  : join(dirname(serverFile), '..', 'client');
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
