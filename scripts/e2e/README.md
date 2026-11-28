@@ -23,6 +23,7 @@ Chromeは`/usr/bin/google-chrome`を使う (`--no-sandbox`)。別の場所なら
 | `mock-ask-doors.mjs [ポート]` | 10の扉用のASKモック。答えは「ペンギン」固定。質問に「失敗」を含むと、その質問の1回目だけ HTTP 500。解答は「ペンギン」を含むと正解、「鳥」だけだとおしい、それ以外は不正解。答えがテーマに合うかは見られない |
 | `ai-live-ui.mjs <URL> <出力dir> [テーマ ...]` | 本物のASKで、テーマごとにAI GMが決めた答えを画面から読んで一覧にする (テーマ省略時は内蔵の8件と指定なし2件)。合っているかは人が出力と画像で判断する。サーバは本物のキーで起動する |
 | `entry-shot.mjs <URL> <出力dir>` | ログイン画面のタイトルを320/360/390/1280px幅で撮る |
+| `topic-clamp-check.mjs <URL> <出力dir>` | 390x844で、ゲーム中のお題が3行に省略されること、タップ・Enter・Spaceで全文と3行を切り替えられること、短いお題とロビーでは省略しないこと、ロビーへ戻ると3行に戻ることを、itoと10の扉で確かめる。環境変数`CHROME_PATH`でChromeの場所を上書きできる |
 | `mock-ask.mjs [ポート]` | ASK APIの簡易モック (お題を1.5秒後に返す)。`ASK_API_URL=http://localhost:47301`で向けて使う (httpはlocalhostだけ許可される)。このとき`ASK_API_KEY`と`ASK_PROJECT_ID`はダミー値 (例: `dummy`と`1`) でよい |
 
 モックは127.0.0.1で待ち受けるため、ホストで起動したサーバからしか届かない。コンテナ内のサーバからは届かない (compose.yamlにhost-gatewayの設定が無く、server/ai.tsがhttpをlocalhost/127.0.0.1/[::1]だけ許すため)。
