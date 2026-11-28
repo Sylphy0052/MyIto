@@ -11,7 +11,7 @@ const LONG = 'あ'.repeat(10) + 'い'.repeat(10) + 'う'.repeat(10) + 'え'.repe
   'か'.repeat(10) + 'き'.repeat(10) + 'く'.repeat(10) + 'け'.repeat(10) + 'こ'.repeat(10);
 const SHORT = 'ねこのなまえ十字';
 
-const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const results = [];
 const check = (name, ok) => {
   results.push({ name, ok });
@@ -57,6 +57,16 @@ const settle = async (page) => {
   });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 };
+
+// リサイズ後のレイアウトが反映され、行数が [min, max] に入るまで待つ (アニメ状態だけでは再描画を待てない)
+const waitLines = (page, min, max) =>
+  page.waitForFunction(([lo, hi]) => {
+    const el = document.querySelector('.topic-text');
+    if (!el) return false;
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || parseFloat(getComputedStyle(el).fontSize) * 1.5;
+    const lines = Math.round(el.getBoundingClientRect().height / lh);
+    return lines >= lo && lines <= hi;
+  }, [min, max]);
 
 async function openRoom(topic, mode) {
   const host = await newClient('ホスト');
@@ -104,8 +114,10 @@ async function openRoom(topic, mode) {
 
   // 全文表示中に幅を変えても (1280幅では3行に収まる)、表示が残り、3行へ戻せる
   await host.setViewportSize({ width: 1280, height: 800 });
+  await waitLines(host, 1, 3);
   await settle(host);
   await host.setViewportSize({ width: 390, height: 844 });
+  await waitLines(host, 8, 100);
   await settle(host);
   check('ito 全文表示中に幅を変えて戻しても全文のまま', (await metrics(host)).expanded === 'true');
 
