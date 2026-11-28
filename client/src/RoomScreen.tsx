@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense, type KeyboardEvent } from 'react';
 import { AnimatePresence, m } from 'motion/react';
-import { isDoorsPhase, type RoomView } from '../../shared/types';
+import { isDoorsPhase, type ClientEventName, type ClientEventPayloads, type RoomView } from '../../shared/types';
 import { Lobby } from './Lobby';
 import { DEAL_INTERVAL_S } from './dealTiming';
 import { ChunkErrorBoundary, GameLoading, lazyGame } from './lazyGame';
@@ -14,7 +14,7 @@ const COPIED_LABEL_MS = 2000;
 // お知らせが消えるとき、余白ごと畳んで下の要素を詰める
 const NOTICE_COLLAPSE = { opacity: 0, height: 0, marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0 };
 
-export type Act = (event: string, payload?: object) => Promise<boolean>;
+export type Act = <E extends ClientEventName>(event: E, payload?: ClientEventPayloads[E]) => Promise<boolean>;
 
 interface Props {
   view: RoomView;

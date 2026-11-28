@@ -1,11 +1,14 @@
-import { io } from 'socket.io-client';
-import type { AckResult } from '../../shared/types';
+import { io, type Socket } from 'socket.io-client';
+import type { AckResult, ClientEventName, ClientEventPayloads, ClientToServerEvents, ServerToClientEvents } from '../../shared/types';
 
-export const socket = io();
+export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io();
 
-export function send(event: string, payload: object = {}): Promise<AckResult> {
+export function send<E extends ClientEventName>(
+  event: E,
+  payload: ClientEventPayloads[E] = {} as ClientEventPayloads[E],
+): Promise<AckResult> {
   return new Promise((resolve) => {
-    socket.timeout(10_000).emit(event, payload, (err: Error | null, res: AckResult) => {
+    (socket.timeout(10_000) as unknown as { emit: (e: string, p: unknown, cb: (err: Error | null, res: AckResult) => void) => void }).emit(event, payload, (err: Error | null, res: AckResult) => {
       resolve(err ? { ok: false, error: '通信がタイムアウトしました', retry: true } : res);
     });
   });

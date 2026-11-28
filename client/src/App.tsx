@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoomView, ShutdownNotice } from '../../shared/types';
+import type { ClientEventName, ClientEventPayloads, RoomView, ShutdownNotice } from '../../shared/types';
 import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
@@ -117,7 +117,7 @@ export function App() {
 
   /** ゲーム操作を送り、失敗したらエラーを表示する */
   const act = useCallback(
-    async (event: string, payload: object = {}) => {
+    async <E extends ClientEventName>(event: E, payload: ClientEventPayloads[E] = {} as ClientEventPayloads[E]) => {
       const res = await send(event, payload);
       if (!res.ok) showError(res.error);
       return res.ok;
