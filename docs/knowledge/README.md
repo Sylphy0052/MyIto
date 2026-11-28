@@ -13,3 +13,4 @@
 - [デプロイ先サーバの公開コンテナを入れ替える](deploy-redeploy-live-container.md) — 公開用の作業dirでビルドしてcompose runで単発起動。1回目の起動が失敗することがある
 - [e2eでGMの決め方のselectを掴めずタイムアウトする](e2e-lobby-select-by-row.md) — labelと結びついていない。`.field-row`の見出しで絞って掴む
 - [worktree作業中に相対パスでfinalize.pyを流す](finalize-from-main-cwd.md) — cwdがmainのままだと古いスクリプトがmain側へ書く。絶対パスと`--public`を明示する
+- [sandbox内でサーバの型検査と起動確認をする](sandbox-server-check.md) — worktreeで先に`npm ci`。tsxは`node --import tsx`で読む
