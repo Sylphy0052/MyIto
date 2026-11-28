@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import {
   DOORS_AI_MODELS,
   DOORS_DEFAULT_QUESTIONS,
@@ -176,6 +176,8 @@ class ItoEngine implements GameEngine {
 
 export class Room {
   readonly code: string;
+  /** 招待URLに載せる合言葉 (64bitの乱数)。参加者にだけ渡す */
+  readonly joinKey = randomBytes(8).toString('base64url');
   hostId = '';
   phase: Phase = 'lobby';
   private readonly ito = new ItoEngine(this);
@@ -636,6 +638,7 @@ export class Room {
   viewFor(viewerId: string): RoomView {
     return {
       code: this.code,
+      joinKey: this.joinKey,
       you: viewerId,
       hostId: this.hostId,
       phase: this.phase,

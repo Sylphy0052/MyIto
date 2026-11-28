@@ -4,7 +4,7 @@ import { LIMITS } from '../../shared/types';
 import { loadSession } from './socket';
 
 interface Props {
-  onEnter: (name: string, code: string | null) => Promise<void>;
+  onEnter: (name: string, code: string | null, key?: string) => Promise<void>;
 }
 
 const TITLE = 'TableTalkOnline';
@@ -36,14 +36,19 @@ const letterVariants: Variants = {
 
 export function Entry({ onEnter }: Props) {
   const [name, setName] = useState(() => loadSession()?.name ?? localStorage.getItem('ito:name') ?? '');
-  const [code, setCode] = useState(() => new URLSearchParams(location.search).get('room')?.toUpperCase() ?? '');
+  // 招待URL (/?room=<CODE>&k=<KEY>) の合言葉。入力欄のコードが招待URLのコードと同じときだけ join に載せる
+  const [invite] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return { code: params.get('room')?.toUpperCase() ?? '', key: params.get('k') ?? '' };
+  });
+  const [code, setCode] = useState(invite.code);
   const [busy, setBusy] = useState(false);
 
   const submit = async (joinCode: string | null) => {
     if (busy) return;
     setBusy(true);
     localStorage.setItem('ito:name', name.trim());
-    await onEnter(name.trim(), joinCode);
+    await onEnter(name.trim(), joinCode, joinCode && joinCode === invite.code && invite.key ? invite.key : undefined);
     setBusy(false);
   };
 

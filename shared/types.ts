@@ -186,6 +186,8 @@ export interface TopicSuggestionView {
 
 export interface RoomView {
   code: string;
+  /** 招待URLに載せる合言葉。ルームの参加者にだけ配る。これを付けたjoinは、join失敗の制限中でも通る */
+  joinKey: string;
   you: string;
   hostId: string;
   phase: Phase;
@@ -218,7 +220,7 @@ export interface RoomView {
 export type AckResult =
   | { ok: true; code?: string; token?: string }
   /** retry: 一時的な失敗 (タイムアウト、レート制限)。セッションを残して再試行してよい */
-  | { ok: false; error: string; retry?: boolean };
+  | { ok: false; error: string; retry?: boolean; /** join失敗の制限中に、次に試せるまでの秒数 */ retryAfterSec?: number };
 export type Ack = (res: AckResult) => void;
 
 /** サーバが終了する直前に全員へ送る `shutdown` イベントの内容 */
@@ -245,7 +247,7 @@ type Empty = Record<string, never> | undefined;
 /** クライアントがサーバへ送るイベントの名前とペイロードの対応 */
 export interface ClientEventPayloads {
   create: Fields<'name'>;
-  join: Fields<'code' | 'name' | 'token'>;
+  join: Fields<'code' | 'name' | 'token' | 'key'>;
   leave: Empty;
   settings: Fields<'cardsPerPlayer'>;
   'topic:random': Empty;
@@ -288,4 +290,6 @@ export type ClientToServerEvents = {
 export interface ServerToClientEvents {
   state: (view: RoomView) => void;
   shutdown: (notice: ShutdownNotice) => void;
+  /** 同じ席へtoken付きで別のソケットが入ったときの生存確認。受けたらすぐackを返す */
+  'seat:probe': (ack: () => void) => void;
 }

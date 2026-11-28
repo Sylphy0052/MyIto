@@ -118,7 +118,7 @@ export function RoomScreen({ view, act, onLeave, connected }: Props) {
       reset?.();
     };
   }, [isPerfect, flow.isJustFinished]);
-  const inviteUrl = `${location.origin}/?room=${view.code}`;
+  const inviteUrl = `${location.origin}/?room=${view.code}&k=${encodeURIComponent(view.joinKey)}`;
   // 最後にコピーできた時刻。0 なら表示を戻す。連打したときは最後に押してから数える
   const [copiedAt, setCopiedAt] = useState(0);
   useEffect(() => {
