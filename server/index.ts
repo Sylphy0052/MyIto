@@ -521,13 +521,18 @@ httpServer.listen(PORT, () => {
 
 /** 終了信号を受けたら全員へ告知し、少し待ってから接続を閉じて終える。ルームはメモリ上にしか無いので消える */
 function shutdown(signal: NodeJS.Signals): void {
-  if (shuttingDown) return;
+  if (shuttingDown) {
+    // 開発時のCtrl+C2回は待たずに即終了する。SIGTERMの重複は従来どおり無視
+    if (signal === 'SIGINT') process.exit(1);
+    return;
+  }
   shuttingDown = true;
   console.log(`received ${signal}: notifying ${io.engine.clientsCount} clients and shutting down`);
   const notice: ShutdownNotice = { reason: 'restart' };
   io.emit('shutdown', notice);
   // 閉じる処理が終わらなくても、docker stopの猶予内に終える
   setTimeout(() => {
+    // 終了コード1は「正常に閉じられず強制終了した」異常終了を示す意図どおりの値
     console.error('shutdown timed out; exiting');
     process.exit(1);
   }, SHUTDOWN_FORCE_EXIT_MS).unref();
