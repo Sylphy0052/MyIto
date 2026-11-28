@@ -1,7 +1,7 @@
 // 10の扉 (AI GM) を1クライアントで通し、返答・失敗表示・再試行・取り消し・結果画面を見て、各画面を撮る
 // 使い方: node ai-gm-check.mjs <base URL> <screenshot dir>
 // サーバは mock-ask-doors.mjs に向けて起動しておく (ASK_API_URL=http://localhost:47301、ダミーのキーとプロジェクト)
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -11,7 +11,7 @@ mkdirSync(out, { recursive: true });
 const ANSWER = 'ペンギン';
 // モックは同じ質問を2回目から成功させるので、再実行しても失敗するよう質問文に実行ごとの印を付ける
 const TAG = Date.now().toString(36);
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
 const frames = [];
 page.on('websocket', (ws) => ws.on('framereceived', (f) => frames.push(String(f.payload))));

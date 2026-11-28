@@ -1,6 +1,6 @@
 // 10の扉を3クライアントで通す。GMランダムの次のGM表示と引き直し、GM指名での答えの漏えい、承認、回数、結果画面を見て、各画面を撮る
 // 使い方: node doors-check.mjs <base URL> <screenshot dir> [reduced]
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -9,7 +9,7 @@ const reduced = process.argv[4] === 'reduced';
 mkdirSync(out, { recursive: true });
 
 const ANSWER = 'ペンギン';
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok) => {
   results.push({ name, ok });

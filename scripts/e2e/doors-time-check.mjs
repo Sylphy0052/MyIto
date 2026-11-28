@@ -4,7 +4,7 @@
 //       → 「時間 +1分」で質問へ戻る → 回数を使い切った最終解答の段階にも残り時間が出て、GMへ届いた最終解答の判定待ちの間は止まる
 //       → 最終解答の段階で残りが0になると負けで終わる
 // 使い方: node doors-time-check.mjs <base URL> <screenshot dir>
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -13,7 +13,7 @@ mkdirSync(out, { recursive: true });
 
 const MINUTE_MS = 6000;
 const TAG = `t${Date.now() % 100000}`;
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok, detail = '') => {
   results.push(ok);
