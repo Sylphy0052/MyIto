@@ -20,8 +20,15 @@ const ROOM_IDLE_MS = 60 * 60_000;
 // 一度もロビーを出ずに無人になったルームは早く片付ける (作成の連打で枠を埋められないようにする)
 const UNPLAYED_ROOM_IDLE_MS = 3 * 60_000;
 const SWEEP_INTERVAL_MS = 60_000;
-// ソケットごとのルーム作成の間隔。1人が数回作り直す使い方は止めず、連打だけを断る
+// 接続元アドレスごとのルーム作成の間隔。1人が数回作り直す使い方は止めず、連打だけを断る。
+// 接続ごとに数えると、つなぎ直すだけで逃れられる
 const CREATE_INTERVAL_MS = 30_000;
+const lastCreateAt = new Map<string, number>();
+// 数える単位。アドレスが取れないときは接続ごとに戻す (リバースプロキシを置くと全員が同じアドレスになるので、置く前に見直す)
+function createKey(socket: GameSocket): string {
+  const address = socket.handshake.address.replace(/^::ffff:/, '');
+  return address ? `addr:${address}` : `socket:${socket.id}`;
+}
 const MAX_ROOMS = 200;
 const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
@@ -69,7 +76,6 @@ interface SocketData {
   windowCount?: number;
   doorsWindowStart?: number;
   doorsWindowCount?: number;
-  lastCreateAt?: number;
 }
 type GameSocket = Socket<any, any, any, SocketData>;
 
@@ -281,7 +287,9 @@ io.on('connection', (socket: GameSocket) => {
     const name = cleanText(p?.name, LIMITS.name);
     if (!name) return ack({ ok: false, error: 'ニックネームを入力してください' });
     const now = Date.now();
-    if (socket.data.lastCreateAt !== undefined && now - socket.data.lastCreateAt < CREATE_INTERVAL_MS) {
+    for (const [key, at] of lastCreateAt) if (now - at >= CREATE_INTERVAL_MS) lastCreateAt.delete(key);
+    const limitKey = createKey(socket);
+    if (lastCreateAt.has(limitKey)) {
       return ack({ ok: false, error: 'ルームの作成は30秒に1回までです。少し待ってください' });
     }
     if (rooms.size >= MAX_ROOMS) return ack({ ok: false, error: 'ルーム数が上限です。既存のルームに入ってください' });
@@ -291,7 +299,7 @@ io.on('connection', (socket: GameSocket) => {
     } catch (e) {
       return ack({ ok: false, error: errorMessage(e) });
     }
-    socket.data.lastCreateAt = now;
+    lastCreateAt.set(limitKey, now);
     const room = new Room(code);
     room.onDoorsTimeUp = () => broadcast(room);
     rooms.set(room.code, room);
