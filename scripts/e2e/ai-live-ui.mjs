@@ -2,7 +2,7 @@
 // 各テーマで1人でAI GMのラウンドを始め、テーマ文字列を読み、質問を2つ送って返答を読み、ラウンドを中止して公開された答えを読む
 // 使い方: node ai-live-ui.mjs <base URL> <screenshot dir> [テーマ ...]  (テーマ省略時は内蔵の8件と、テーマを指定しない2件)
 // サーバは本物の ASK_API_KEY / ASK_PROJECT_ID で起動しておく。答えが合っているかは人が出力と画像で判断する
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -14,7 +14,7 @@ const themes = given.length
   : ['好きな食べ物', '苦手な生き物', '行ってみたい国', '好きな教科', '無人島に持っていきたいもの', '好きなスポーツ', '好きな動物', '子どもの頃になりたかった職業', '', ''];
 const QUESTIONS = ['それは日本の人の多くが知っていますか?', 'それは身近にありますか?'];
 
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 let bad = 0;
 for (const [i, theme] of themes.entries()) {
   const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();

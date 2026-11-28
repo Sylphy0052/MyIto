@@ -1,7 +1,7 @@
 // 10の扉 (GM=プレイヤー指名) を5クライアント (GM 1 + 回答者 4) で通す
 // 設定: 質問3回・嘘1回・テーマ自由入力。並行提案、全員OKの承認、取り消し、Yes/嘘/不正解/却下/おしい、GMの訂正 (嘘の付け外し・解答)、延長依頼と延長、確認ダイアログ、最終解答で正解
 // 使い方: node doors5-check.mjs <base URL> <screenshot dir>
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -11,7 +11,7 @@ mkdirSync(out, { recursive: true });
 const ANSWER = 'ペンギン';
 const THEME = '好きな動物';
 const TAG = `t${Date.now() % 100000}`;
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok, detail = '') => {
   results.push(ok);
