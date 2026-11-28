@@ -123,10 +123,20 @@ function broadcast(room: Room): void {
   driveAiGm(room);
   // 10の扉でGMがランダムなら、ロビーで次のGMを引いておいてから配る (切断・退出・設定変更で決め直す)
   room.refreshNextGm();
-  for (const s of io.sockets.sockets.values() as Iterable<GameSocket>) {
+  for (const s of roomSockets(room.code)) {
     if (s.data.code === room.code && s.data.playerId) {
       s.emit('state', room.viewFor(s.data.playerId));
     }
+  }
+}
+
+/** Socket.IOのroom (socket.join) に入っているソケットだけを返す。全接続は走査しない */
+function* roomSockets(code: string): Generator<GameSocket> {
+  const ids = io.sockets.adapter.rooms.get(code);
+  if (!ids) return;
+  for (const id of ids) {
+    const s = io.sockets.sockets.get(id);
+    if (s) yield s;
   }
 }
 
@@ -276,6 +286,7 @@ function detach(socket: GameSocket): void {
   const { code, playerId } = socket.data;
   socket.data.code = undefined;
   socket.data.playerId = undefined;
+  if (code) void socket.leave(code);
   const room = code ? rooms.get(code) : undefined;
   if (!room || !playerId || isPlayerOnline(room.code, playerId)) return;
   room.setConnected(playerId, false);
@@ -302,6 +313,7 @@ function enter(socket: GameSocket, room: Room, name: string, token: unknown, ack
     if (socket.data.code !== room.code || socket.data.playerId !== player.id) detach(socket);
     socket.data.code = room.code;
     socket.data.playerId = player.id;
+    void socket.join(room.code);
     room.reassignHostIfAway();
     ack({ ok: true, code: room.code, token: player.token });
     broadcast(room);
@@ -311,7 +323,7 @@ function enter(socket: GameSocket, room: Room, name: string, token: unknown, ack
 }
 
 function isPlayerOnline(code: string, playerId: string): boolean {
-  for (const s of io.sockets.sockets.values() as Iterable<GameSocket>) {
+  for (const s of roomSockets(code)) {
     if (s.data.code === code && s.data.playerId === playerId) return true;
   }
   return false;
@@ -357,6 +369,7 @@ io.on('connection', (socket: GameSocket) => {
     const room = code ? rooms.get(code) : undefined;
     socket.data.code = undefined;
     socket.data.playerId = undefined;
+    if (code) void socket.leave(code);
     // 同じ席の別タブが残っていれば席はそのまま
     if (room && playerId && !isPlayerOnline(room.code, playerId)) {
       room.leave(playerId);
