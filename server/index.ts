@@ -394,7 +394,7 @@ io.on('connection', (socket: GameSocket) => {
       const label = mode === 'doors' ? 'テーマ' : 'お題';
       room.aiBusy = true;
       room.notice = `AIが${label}を考えています...`;
-      generateTopics(sanitizeGenre(p.genre), mode)
+      generateTopics(sanitizeGenre(p.genre), mode, room.code)
         .then((topics) => {
           if (room.phase !== 'lobby' || room.mode !== mode) return;
           room.topicCandidates = topics;
@@ -408,7 +408,10 @@ io.on('connection', (socket: GameSocket) => {
           room.topic = mode === 'doors' ? randomDoorsTheme(room.topic) : randomTopic(room.topic);
           room.topicSource = 'ai-fallback';
           room.topicCandidates = [];
-          room.notice = `AI生成に失敗したので、内蔵リストから${label}を出しました`;
+          room.notice =
+            e instanceof AiLimitError
+              ? `AIが混み合っているので、内蔵リストから${label}を出しました`
+              : `AI生成に失敗したので、内蔵リストから${label}を出しました`;
         })
         .finally(() => {
           room.aiBusy = false;
