@@ -92,6 +92,13 @@ async function openRoom(topic, mode) {
   check('ito タップで全文が出る (aria-expanded=true、9行以上)', open.expanded === 'true' && open.lines >= 8);
   await host.screenshot({ path: `${out}/03-ito-long-expanded.png` });
 
+  // 全文表示中に幅を変えても (1280幅では3行に収まる)、表示が残り、3行へ戻せる
+  await host.setViewportSize({ width: 1280, height: 800 });
+  await settle(host);
+  await host.setViewportSize({ width: 390, height: 844 });
+  await settle(host);
+  check('ito 全文表示中に幅を変えて戻しても全文のまま', (await metrics(host)).expanded === 'true');
+
   await host.locator('.topic-text').click();
   await settle(host);
   const closed = await metrics(host);
