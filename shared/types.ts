@@ -289,3 +289,6 @@ export interface ServerToClientEvents {
   state: (view: RoomView) => void;
   shutdown: (notice: ShutdownNotice) => void;
 }
+
+// CI確認用: 型エラーを意図的に入れる (mergeしない)
+export const ciProbe: number = "not a number";
