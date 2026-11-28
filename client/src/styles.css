@@ -296,6 +296,7 @@ textarea::placeholder {
   flex: 1;
   overflow-wrap: anywhere;
 }
+/* 3行はRoomScreen.tsxのTopicTextの説明と揃える */
 .topic-text.clamped {
   display: -webkit-box;
   -webkit-box-orient: vertical;

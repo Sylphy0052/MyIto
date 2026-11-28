@@ -19,12 +19,14 @@ interface Props {
   onLeave: () => Promise<void>;
 }
 
-// ロビー以外ではお題を3行に省略する。省略が起きているときだけ、タップで全文と3行を切り替える
+// ロビー以外ではお題を3行に省略する (行数はstyles.cssの`.topic-text.clamped`と揃える)。
+// 省略が起きているときだけ、タップで全文と3行を切り替える
 function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
-  // ロビーへ戻ったときだけ3行へ戻す。ゲーム中の段階の移り変わりでは保つ
+  // ロビーへ戻ったときだけ3行へ戻す。ゲーム中の段階の移り変わりでは保つ。
+  // 同じお題のまま次のゲームへ進むと要素が作り直されないので、描画中に戻す (上のflowと同じ書き方)
   if (isLobby && isExpanded) setIsExpanded(false);
   // 省略の有無は3行の状態でだけ測る。全文表示中は高さが等しくなるので、直前の判定を保つ
   useLayoutEffect(() => {
@@ -32,6 +34,8 @@ function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
     if (!el || isLobby || isExpanded) return;
     const measure = () => setIsClamped(el.scrollHeight > el.clientHeight);
     measure();
+    // ResizeObserverが無い環境では、幅の変化を拾えないだけで済ませる
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
