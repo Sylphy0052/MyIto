@@ -60,7 +60,8 @@ if (existsSync(clientDir)) {
   );
   app.get('/{*path}', (_req, res) => {
     res.set('Cache-Control', 'no-cache');
-    res.sendFile(join(clientDir, 'index.html'));
+    // rootを渡すと、配置先パスの`.xxx`ディレクトリ (dotfiles判定) に影響されない
+    res.sendFile('index.html', { root: clientDir });
   });
 }
 const httpServer = createServer(app);
