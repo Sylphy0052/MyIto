@@ -33,6 +33,16 @@ run() {
 
 echo "HOST_PORT=$HOST_PORT GIT_COMMIT=$GIT_COMMIT"
 
+# 未コミット変更があると GIT_COMMIT と実際のビルド内容がずれるため、buildの前に止める
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "警告: 作業ツリーに未コミットの変更があります (--dry-run のため続行)" >&2
+  else
+    echo "エラー: 作業ツリーに未コミットの変更があります。commitかstashしてから実行してください" >&2
+    exit 1
+  fi
+fi
+
 # 1. ビルド。失敗したら set -e で止まり、旧コンテナは触らない
 run docker compose build
 
