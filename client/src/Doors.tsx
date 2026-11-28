@@ -3,6 +3,7 @@ import { AnimatePresence, m } from 'motion/react';
 import { LIMITS, type DoorsView, type ProposalKind, type ProposalView, type RoomView } from '../../shared/types';
 import { normalizeText } from '../../shared/normalize';
 import type { Act } from './RoomScreen';
+import { RadioGroup } from './RadioGroup';
 import { DoorRow, LogRow, ReplyBadge, STATUS_LABEL, WaitingDoors, kindLabel } from './DoorsParts';
 import { CorrectPanel, GmQueue, SecretAnswer } from './DoorsGm';
 import { DoorsResult } from './DoorsResult';
@@ -376,13 +377,14 @@ function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: bool
     <section className="doors-panel proposal-form">
       <h3>{isFinal ? '最終解答を出す' : '質問・解答を提案'}</h3>
       {!isFinal && (
-        <div className="kind-toggle" role="radiogroup" aria-label="提案の種類">
-          {(['question', 'guess'] as const).map((k) => (
-            <button key={k} role="radio" aria-checked={kind === k} className={kind === k ? 'selected' : ''} onClick={() => setKind(k)}>
-              {k === 'question' ? '質問' : '解答'}
-            </button>
-          ))}
-        </div>
+        <RadioGroup
+          label="提案の種類"
+          className="kind-toggle"
+          options={['question', 'guess'] as const}
+          value={kind}
+          getLabel={(k) => (k === 'question' ? '質問' : '解答')}
+          onChange={setKind}
+        />
       )}
       <form
         className="field-row"

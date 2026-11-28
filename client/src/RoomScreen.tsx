@@ -20,6 +20,7 @@ interface Props {
   view: RoomView;
   act: Act;
   onLeave: () => Promise<void>;
+  connected: boolean;
 }
 
 // ロビー以外ではお題を3行に省略する (行数はstyles.cssの`.topic-text.clamped`と揃える)。
@@ -72,7 +73,7 @@ function TopicText({ topic, isLobby }: { topic: string; isLobby: boolean }) {
   );
 }
 
-export function RoomScreen({ view, act, onLeave }: Props) {
+export function RoomScreen({ view, act, onLeave, connected }: Props) {
   const isHost = view.you === view.hostId;
   const isDoorsRound = isDoorsPhase(view.phase);
   const nameOf = useCallback(
@@ -199,6 +200,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
           退室
         </button>
       </m.header>
+      <fieldset className="room-controls" disabled={!connected}>
 
       <section className="topic">
         <span className="label">{view.mode === 'doors' ? 'テーマ' : 'お題'}</span>
@@ -280,6 +282,7 @@ export function RoomScreen({ view, act, onLeave }: Props) {
           )}
         </m.section>
       )}
+      </fieldset>
     </div>
   );
 }
