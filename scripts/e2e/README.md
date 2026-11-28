@@ -9,7 +9,7 @@ cd scripts/e2e
 npm install
 ```
 
-Chromeは`/usr/bin/google-chrome`を使う (`--no-sandbox`)。別の場所なら各スクリプトの`executablePath`を直す。
+Chromeは`/usr/bin/google-chrome`を使う (`--no-sandbox`)。別の場所なら環境変数`CHROME_PATH`で指定する (起動は`lib.mjs`にまとめてある)。各スクリプトは`npm run <名前> -- <URL> <出力dir>`でも呼べる (例: `CHROME_PATH=/opt/chrome npm run entry-shot -- http://localhost:47213 ./shots`)。
 
 ## 使い方
 

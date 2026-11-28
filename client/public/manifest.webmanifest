@@ -1,0 +1,13 @@
+{
+  "name": "TableTalkOnline",
+  "short_name": "TableTalkOnline",
+  "description": "友達とURLで集まって、itoと10の扉を遊べるオンラインゲーム。",
+  "lang": "ja",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2f6fed",
+  "background_color": "#ffffff",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

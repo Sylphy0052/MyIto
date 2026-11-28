@@ -2,6 +2,19 @@
   "name": "myito-e2e",
   "private": true,
   "type": "module",
+  "scripts": {
+    "lobby-check": "node lobby-check.mjs",
+    "doors-check": "node doors-check.mjs",
+    "doors-turn-check": "node doors-turn-check.mjs",
+    "doors-time-check": "node doors-time-check.mjs",
+    "doors5-check": "node doors5-check.mjs",
+    "ai-gm-check": "node ai-gm-check.mjs",
+    "ai-live-ui": "node ai-live-ui.mjs",
+    "entry-shot": "node entry-shot.mjs",
+    "topic-clamp-check": "node topic-clamp-check.mjs",
+    "mock-ask": "node mock-ask.mjs",
+    "mock-ask-doors": "node mock-ask-doors.mjs"
+  },
   "dependencies": {
     "playwright-core": "^1.65.1"
   }

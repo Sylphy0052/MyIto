@@ -3,7 +3,7 @@
 // 流れ: 60秒設定 → 確定から数える → 届くと止まる → 取り消すと残りから再開 → GMが答えると満タンから数え直す
 //       → 時間切れで回数を使い、承認待ちは残る → 回数を使い切ると最終解答へ (手番は出ない)
 // 使い方: node doors-turn-check.mjs <base URL> <screenshot dir>
-import { chromium } from 'playwright-core';
+import { launchChrome } from './lib.mjs';
 import { mkdirSync } from 'node:fs';
 
 const base = process.argv[2] ?? 'http://localhost:47213';
@@ -11,7 +11,7 @@ const out = process.argv[3] ?? './shots-doors-turn';
 mkdirSync(out, { recursive: true });
 
 const TAG = `t${Date.now() % 100000}`;
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await launchChrome();
 const results = [];
 const check = (name, ok, detail = '') => {
   results.push(ok);
