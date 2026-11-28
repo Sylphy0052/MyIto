@@ -13,7 +13,7 @@ updated: 2026-11-27
 
 ## なぜ
 
-- `npm start` (`tsx server/index.ts`) はrepoのルートの`.env` (`server/loadEnv.ts`) を読む。`.env`が無いか、`ASK_*`が入っていないと未設定になる
+- `npm start` (ビルド済みの`dist/server/index.js`をnodeで起動する。先に`npm run build`が要る) はrepoのルートの`.env` (`server/loadEnv.ts`) を読む。`.env`が無いか、`ASK_*`が入っていないと未設定になる
 
 ## どうするか
 
