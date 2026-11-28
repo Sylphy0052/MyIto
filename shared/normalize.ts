@@ -17,3 +17,4 @@ export function normalizeText(text: string): string {
   // 長音符 (ー) は記号ではなく文字 (Lm) なので残る
   return out.replace(/[\s\p{P}\p{S}]/gu, '');
 }
+export const ciCheck: number = 'type error';
