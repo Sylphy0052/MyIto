@@ -50,9 +50,7 @@ function contains(rect: DOMRect, x: number, y: number, margin = 0): boolean {
 /** 列の中で (x, y) に落としたときの挿入位置 (ドラッグ中のカードを除いた並びでの添字) */
 function findInsertIndex(rowEl: HTMLElement, cardId: string, x: number, y: number): number | null {
   if (!contains(rowEl.getBoundingClientRect(), x, y, ROW_MARGIN_PX)) return null;
-  const slots = Array.from(rowEl.querySelectorAll<HTMLElement>('[data-slot]')).filter(
-    (el) => el.dataset.slot !== cardId,
-  );
+  const slots = Array.from(rowEl.querySelectorAll<HTMLElement>('[data-slot]')).filter((el) => el.dataset.slot !== cardId);
   if (slots.length === 0) return 0;
   let best = 0;
   let bestDist = Infinity;

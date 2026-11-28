@@ -19,7 +19,9 @@ for (const width of [320, 360, 390, 1280]) {
     const tops = new Set([...el.querySelectorAll('span')].map((s) => Math.round(s.getBoundingClientRect().top)));
     return tops.size;
   });
-  console.log(`width=${width} h1=${Math.round(box.width)}x${Math.round(box.height)} scrollW=${scrollW} clientW=${clientW} lines=${lines} text=${await h1.getAttribute('aria-label')}`);
+  console.log(
+    `width=${width} h1=${Math.round(box.width)}x${Math.round(box.height)} scrollW=${scrollW} clientW=${clientW} lines=${lines} text=${await h1.getAttribute('aria-label')}`,
+  );
   await page.screenshot({ path: `${out}/entry-${width}.png` });
 }
 await browser.close();

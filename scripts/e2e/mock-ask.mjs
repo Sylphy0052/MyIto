@@ -10,7 +10,7 @@ http
     req.on('end', () => {
       setTimeout(() => {
         res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
-        for (const t of topics) res.write(JSON.stringify({ type: 'add_message_token', token: `${t}\n` }) + '\n');
+        for (const t of topics) res.write(`${JSON.stringify({ type: 'add_message_token', token: `${t}\n` })}\n`);
         res.end();
       }, 1500);
     });

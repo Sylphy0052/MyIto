@@ -8,9 +8,13 @@ export function send<E extends ClientEventName>(
   payload: ClientEventPayloads[E] = {} as ClientEventPayloads[E],
 ): Promise<AckResult> {
   return new Promise((resolve) => {
-    (socket.timeout(10_000) as unknown as { emit: (e: string, p: unknown, cb: (err: Error | null, res: AckResult) => void) => void }).emit(event, payload, (err: Error | null, res: AckResult) => {
-      resolve(err ? { ok: false, error: '通信がタイムアウトしました', retry: true } : res);
-    });
+    (socket.timeout(10_000) as unknown as { emit: (e: string, p: unknown, cb: (err: Error | null, res: AckResult) => void) => void }).emit(
+      event,
+      payload,
+      (err: Error | null, res: AckResult) => {
+        resolve(err ? { ok: false, error: '通信がタイムアウトしました', retry: true } : res);
+      },
+    );
   });
 }
 

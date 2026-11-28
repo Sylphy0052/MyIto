@@ -57,17 +57,25 @@ const gmSelect = host.locator('.field-row', { hasText: 'GMの決め方' }).locat
 await host.getByRole('radio', { name: '10の扉' }).click();
 await gmSelect.selectOption('random');
 const nextGmOf = async (page) => {
-  const t = await page.getByText(/(?:次のGM: |次は ).+? さん/).first().textContent({ timeout: 5000 }).catch(() => '');
+  const t = await page
+    .getByText(/(?:次のGM: |次は ).+? さん/)
+    .first()
+    .textContent({ timeout: 5000 })
+    .catch(() => '');
   return (t ?? '').match(/(?:次のGM: |次は )(.+?) さん/)?.[1] ?? '';
 };
 const drawnByHost = await nextGmOf(host);
 check('GMランダムのとき次のGMがホストに出る', drawnByHost !== '');
 check('次のGMがゲストにも同じ名前で出る', drawnByHost !== '' && (await nextGmOf(a)) === drawnByHost);
 await host.getByRole('button', { name: '引き直す' }).click();
-await a.getByText(new RegExp(`次は (?!${drawnByHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} さん).+? さん`)).first().waitFor({ timeout: 5000 }).then(
-  () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', true),
-  () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', false),
-);
+await a
+  .getByText(new RegExp(`次は (?!${drawnByHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} さん).+? さん`))
+  .first()
+  .waitFor({ timeout: 5000 })
+  .then(
+    () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', true),
+    () => check('ホストの引き直しで次のGMが変わり、ゲストにも反映される', false),
+  );
 await shot(a, '01a-guest-next-gm');
 
 // ロビー: GMを指名する
@@ -84,7 +92,11 @@ await shot(host, '03-gm-setup');
 await shot(a, '04-guest-setup');
 await host.locator('input[placeholder^="答え"]').fill(ANSWER);
 await host.getByRole('button', { name: '確定' }).click();
-await a.getByText(/残り\s*10\s*\/\s*10/).first().waitFor({ timeout: 5000 }).catch(() => {});
+await a
+  .getByText(/残り\s*10\s*\/\s*10/)
+  .first()
+  .waitFor({ timeout: 5000 })
+  .catch(() => {});
 await a.waitForTimeout(800);
 await shot(a, '05-guest-asking');
 await shot(host, '06-gm-asking');
@@ -101,10 +113,14 @@ await b.getByRole('button', { name: 'OK', exact: true }).click();
 await host.locator('.reply-button.tone-ok').first().waitFor({ timeout: 5000 });
 await shot(host, '08-gm-queue');
 await host.locator('.reply-button.tone-ok').first().click();
-await a.getByText(/残り\s*9\s*\/\s*10/).first().waitFor({ timeout: 5000 }).then(
-  () => check('回答されると残り回数が1減る', true),
-  () => check('回答されると残り回数が1減る', false),
-);
+await a
+  .getByText(/残り\s*9\s*\/\s*10/)
+  .first()
+  .waitFor({ timeout: 5000 })
+  .then(
+    () => check('回答されると残り回数が1減る', true),
+    () => check('回答されると残り回数が1減る', false),
+  );
 await a.waitForTimeout(600);
 await shot(a, '09-guest-replied');
 
@@ -115,7 +131,11 @@ await a.getByRole('button', { name: '提案' }).click();
 await b.getByRole('button', { name: 'OK', exact: true }).click();
 await host.locator('.reply-button.tone-ok').first().waitFor({ timeout: 5000 });
 await host.getByRole('button', { name: /正解/ }).filter({ hasNotText: '不正解' }).first().click();
-await a.getByText('結果').first().waitFor({ timeout: 5000 }).catch(() => {});
+await a
+  .getByText('結果')
+  .first()
+  .waitFor({ timeout: 5000 })
+  .catch(() => {});
 await a.waitForTimeout(1500);
 await shot(a, '10-guest-result');
 await shot(host, '11-gm-result');

@@ -90,7 +90,10 @@ function parseObject(message: string): Record<string, unknown> | null {
 
 function text(value: unknown, max: number): string {
   if (typeof value !== 'string') return '';
-  return value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
+  return value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .slice(0, max);
 }
 
 async function call(roomCode: string, model: DoorsAiModel, template: string, data: unknown): Promise<string> {
@@ -103,7 +106,10 @@ async function call(roomCode: string, model: DoorsAiModel, template: string, dat
 /** 答えとして使えるなら整えて返す。空・長すぎ・拒否文・危険な文字列なら null */
 function validAnswer(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const answer = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '');
+  const answer = raw
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .trim()
+    .replace(/^[「『"'\s]+|[」』"'\s。]+$/g, '');
   if (answer.length === 0 || answer.length > LIMITS.doorsAnswer) return null;
   if (REFUSAL.test(answer) || looksUnsafe(answer)) return null;
   // 記号だけなど、正規化すると空になる答えは完全一致の判定を壊すので使わない
@@ -112,7 +118,12 @@ function validAnswer(raw: unknown): string | null {
 }
 
 /** テーマから答えと事実メモを決める。出力が使えなければ1回だけやり直し、それでも駄目なら Error を投げる */
-export async function generateSecretAnswer(roomCode: string, model: DoorsAiModel, theme: string, avoid: readonly string[]): Promise<SecretAnswer> {
+export async function generateSecretAnswer(
+  roomCode: string,
+  model: DoorsAiModel,
+  theme: string,
+  avoid: readonly string[],
+): Promise<SecretAnswer> {
   let lastProblem = '';
   for (let i = 0; i < ANSWER_ATTEMPTS; i++) {
     const obj = parseObject(await call(roomCode, model, ANSWER_TEMPLATE, { theme, avoid }));

@@ -11,7 +11,11 @@ const SINK_TRANSITION = { duration: 1, ease: 'easeInOut' } as const;
 
 // 動きの途中で合図が変わっても、前の動きの値が残らないよう、全合図で動かさない値は静止位置へ戻す
 const REST = { x: 0, y: 0, rotate: 0, scale: 1, scaleY: 1 };
-const move = (keyframes: TargetAndTransition, transition: Transition = KEYFRAME_TRANSITION): TargetAndTransition => ({ ...REST, ...keyframes, transition });
+const move = (keyframes: TargetAndTransition, transition: Transition = KEYFRAME_TRANSITION): TargetAndTransition => ({
+  ...REST,
+  ...keyframes,
+  transition,
+});
 
 const HOP = move({ y: [null, -10, 0, -5, 0] }); // yes: 小さく弾む
 const JUMP = move({ y: [null, -18, 0, -8, 0] }); // close・correct: 跳ねる

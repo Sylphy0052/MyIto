@@ -67,13 +67,7 @@ function Count({ value }: { value: number }) {
 function CandidateList({ view, onPick }: { view: RoomView; onPick?: (index: number) => void }) {
   if (view.topicCandidates.length === 0) return null;
   return (
-    <m.ul
-      key={view.topicCandidates.join('\n')}
-      className="topic-candidates"
-      initial="hidden"
-      animate="show"
-      variants={candidatesVariants}
-    >
+    <m.ul key={view.topicCandidates.join('\n')} className="topic-candidates" initial="hidden" animate="show" variants={candidatesVariants}>
       {view.topicCandidates.map((t, i) => {
         const isSelected = view.topicSource === 'ai' && view.topic === t;
         return (
@@ -90,10 +84,7 @@ function CandidateList({ view, onPick }: { view: RoomView; onPick?: (index: numb
                 {t}
               </m.button>
             ) : (
-              <span
-                className={isSelected ? 'candidate-static selected' : 'candidate-static'}
-                aria-current={isSelected || undefined}
-              >
+              <span className={isSelected ? 'candidate-static selected' : 'candidate-static'} aria-current={isSelected || undefined}>
                 {t}
                 {isSelected && <small className="candidate-badge">選択中</small>}
               </span>
@@ -137,8 +128,7 @@ export function Lobby({ view, isHost, act }: Props) {
           })}
         </m.div>
         <m.p variants={rowVariants}>
-          ゲーム: <strong>{MODE_LABEL[view.mode]}</strong> /{' '}
-          {isDoors ? '' : `1人 ${view.cardsPerPlayer} 枚 / `}
+          ゲーム: <strong>{MODE_LABEL[view.mode]}</strong> / {isDoors ? '' : `1人 ${view.cardsPerPlayer} 枚 / `}
           {topicLabel}: {SOURCE_LABEL[view.topicSource]}
         </m.p>
         {isDoors && (
@@ -181,10 +171,7 @@ export function Lobby({ view, isHost, act }: Props) {
       ) : (
         <m.div className="field-row" variants={rowVariants}>
           <span className="label">1人あたりの枚数</span>
-          <select
-            value={view.cardsPerPlayer}
-            onChange={(e) => act('settings', { cardsPerPlayer: Number(e.target.value) })}
-          >
+          <select value={view.cardsPerPlayer} onChange={(e) => act('settings', { cardsPerPlayer: Number(e.target.value) })}>
             {Array.from({ length: LIMITS.maxCardsPerPlayer }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -230,15 +217,15 @@ export function Lobby({ view, isHost, act }: Props) {
             setGenreCut(false);
           }}
         />
-        <button
-          className={view.aiBusy ? 'ai-busy' : undefined}
-          disabled={view.aiBusy}
-          onClick={() => act('topic:ai', { genre })}
-        >
+        <button className={view.aiBusy ? 'ai-busy' : undefined} disabled={view.aiBusy} onClick={() => act('topic:ai', { genre })}>
           {view.aiBusy ? '生成中...' : `AIで${LIMITS.aiCandidates}案生成`}
         </button>
       </m.div>
-      {genreCut && <p className="muted">ジャンルは{LIMITS.genre}字までなので、先頭{LIMITS.genre}字だけ入れました</p>}
+      {genreCut && (
+        <p className="muted">
+          ジャンルは{LIMITS.genre}字までなので、先頭{LIMITS.genre}字だけ入れました
+        </p>
+      )}
       <CandidateList view={view} onPick={(i) => act('topic:pick', { index: i })} />
       <TopicSuggestions
         view={view}

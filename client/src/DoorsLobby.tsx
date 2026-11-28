@@ -1,5 +1,15 @@
 import { m, type Variants } from 'motion/react';
-import { DOORS_AI_MODELS, DOORS_AI_MODEL_LABEL, DOORS_TIME_LIMITS, DOORS_TURN_LIMITS, LIMITS, type DoorsAiModel, type GameMode, type GmPick, type RoomView } from '../../shared/types';
+import {
+  DOORS_AI_MODELS,
+  DOORS_AI_MODEL_LABEL,
+  DOORS_TIME_LIMITS,
+  DOORS_TURN_LIMITS,
+  LIMITS,
+  type DoorsAiModel,
+  type GameMode,
+  type GmPick,
+  type RoomView,
+} from '../../shared/types';
 import type { Act } from './RoomScreen';
 import { RadioGroup } from './RadioGroup';
 
@@ -150,10 +160,7 @@ export function DoorsSettingsForm({ view, act, variants }: { view: RoomView; act
       {s.gmPick === 'ai' && view.aiAvailable && (
         <m.div className="field-row" variants={variants}>
           <span className="label">AIのモデル</span>
-          <select
-            value={s.aiModel}
-            onChange={(e) => act('doors:settings', { aiModel: e.target.value as DoorsAiModel })}
-          >
+          <select value={s.aiModel} onChange={(e) => act('doors:settings', { aiModel: e.target.value as DoorsAiModel })}>
             {DOORS_AI_MODELS.map((model) => (
               <option key={model} value={model}>
                 {DOORS_AI_MODEL_LABEL[model]}

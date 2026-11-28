@@ -36,7 +36,16 @@ function logText(view: RoomView, doors: DoorsView): string {
   const gm = doors.isAiGm ? ['GM: AI'] : [];
   const limit = doors.timeLimitMin > 0 ? [`制限時間: ${doors.timeLimitMin}分${doors.wasTimeUp ? ' (時間切れあり)' : ''}`] : [];
   const turn = doors.turnLimitSec > 0 ? [`1手番: ${doors.turnLimitSec}秒 (時間切れ ${doors.turnTimeoutCount}回)`] : [];
-  return [`10の扉 テーマ: ${view.topic}`, ...gm, ...limit, ...turn, `答え: ${doors.answer || '(答えを決める前に中止)'}`, `結果: ${outcomeLabel(doors)}`, '', ...lines].join('\n');
+  return [
+    `10の扉 テーマ: ${view.topic}`,
+    ...gm,
+    ...limit,
+    ...turn,
+    `答え: ${doors.answer || '(答えを決める前に中止)'}`,
+    `結果: ${outcomeLabel(doors)}`,
+    '',
+    ...lines,
+  ].join('\n');
 }
 
 interface Props {

@@ -43,7 +43,11 @@ function QueueItem({ p, canLie, act }: { p: ProposalView; canLie: boolean; act: 
       <p className="queue-text">{p.text}</p>
       <div className="reply-buttons">
         {replies.map((r) => (
-          <button key={r} className={`reply-button ${replyTone(r)}`} onClick={() => confirmReply(p, r) && act('doors:reply', { id: p.id, reply: r, lie: isLie })}>
+          <button
+            key={r}
+            className={`reply-button ${replyTone(r)}`}
+            onClick={() => confirmReply(p, r) && act('doors:reply', { id: p.id, reply: r, lie: isLie })}
+          >
             <span aria-hidden="true">{REPLY_SYMBOL[r]}</span> {REPLY_LABEL[r]}
           </button>
         ))}

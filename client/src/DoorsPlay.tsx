@@ -10,7 +10,19 @@ import { useSoundSetting } from './sound';
 
 const ACTIVE = new Set(['proposed', 'sent']);
 
-export function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; doors: DoorsView; isGm: boolean; isHost: boolean; act: Act }) {
+export function PlayPhase({
+  view,
+  doors,
+  isGm,
+  isHost,
+  act,
+}: {
+  view: RoomView;
+  doors: DoorsView;
+  isGm: boolean;
+  isHost: boolean;
+  act: Act;
+}) {
   const isFinal = view.phase === 'doors-final';
   const active = doors.proposals.filter((p) => ACTIVE.has(p.status));
   const finished = doors.proposals.filter((p) => !ACTIVE.has(p.status));
@@ -29,7 +41,6 @@ export function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; 
 
   return (
     <div className="doors-play">
-
       {isFinal && (
         <p className="final-guide">
           {doors.isTimeUp ? '時間切れです。' : '質問回数を使い切りました。'}回答者は最終解答を1回だけ出せます (承認の流れは同じ)。
@@ -57,7 +68,13 @@ export function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; 
 
       <div className="doors-columns">
         {isGm ? <GmQueue doors={doors} act={act} /> : <ProposalForm doors={doors} isFinal={isFinal} act={act} />}
-        <ActiveList view={view} doors={doors} active={isGm ? active.filter((p) => p.status === 'proposed') : active} isGm={isGm} act={act} />
+        <ActiveList
+          view={view}
+          doors={doors}
+          active={isGm ? active.filter((p) => p.status === 'proposed') : active}
+          isGm={isGm}
+          act={act}
+        />
       </div>
 
       <div className="doors-controls">
@@ -90,7 +107,13 @@ export function PlayPhase({ view, doors, isGm, isHost, act }: { view: RoomView; 
         )}
       </div>
 
-      <LogList finished={finished} showLie={isGm} canCorrect={isGm && !doors.isAiGm} liesLeft={doors.maxLies - (doors.liesUsed ?? 0)} act={act} />
+      <LogList
+        finished={finished}
+        showLie={isGm}
+        canCorrect={isGm && !doors.isAiGm}
+        liesLeft={doors.maxLies - (doors.liesUsed ?? 0)}
+        act={act}
+      />
     </div>
   );
 }
@@ -107,7 +130,8 @@ export function LatestReply({ doors }: { doors: DoorsView }) {
     setLatest(fresh[fresh.length - 1]!);
   }, [answered]);
   if (!latest?.reply) return null;
-  const effect = latest.reply === 'close' ? 'warn-pulse' : latest.reply === 'wrong' ? 'ng-shake' : latest.reply === 'correct' ? 'ok-glow' : '';
+  const effect =
+    latest.reply === 'close' ? 'warn-pulse' : latest.reply === 'wrong' ? 'ng-shake' : latest.reply === 'correct' ? 'ok-glow' : '';
   return (
     <div className="latest-reply" aria-live="polite">
       <AnimatePresence mode="popLayout">
@@ -137,16 +161,13 @@ function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: bool
   // 同じ内容がすでに出ていれば警告する (止めはしない)
   const duplicate = useMemo(
     () =>
-      key
-        ? doors.proposals.find((p) => p.status !== 'cancelled' && p.status !== 'rejected' && normalizeText(p.text) === key)
-        : undefined,
+      key ? doors.proposals.find((p) => p.status !== 'cancelled' && p.status !== 'rejected' && normalizeText(p.text) === key) : undefined,
     [doors.proposals, key],
   );
   const activeCount = doors.proposals.filter((p) => ACTIVE.has(p.status) && !p.isFinal).length;
   // 質問の段階は残り回数を超えてストックできる。超えた分は回数を使い切った時点で未処理になる
   const isOverStock = !isFinal && activeCount > doors.limit - doors.used;
-  const blocker =
-    isFinal && doors.proposals.some((p) => ACTIVE.has(p.status) && p.isFinal) ? '最終解答は1件ずつ出せます' : '';
+  const blocker = isFinal && doors.proposals.some((p) => ACTIVE.has(p.status) && p.isFinal) ? '最終解答は1件ずつ出せます' : '';
 
   const submit = async () => {
     if (!text.trim() || blocker) return;
@@ -191,14 +212,28 @@ function ProposalForm({ doors, isFinal, act }: { doors: DoorsView; isFinal: bool
       {blocker && <p className="muted">{blocker}</p>}
       {isOverStock && <p className="muted">残り回数を超えてストックしています。回数を使い切ると、残った提案は未処理で終わります。</p>}
       <p className="muted hint-text">
-        提案は、提案者以外の回答者全員がOKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」) 質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
+        提案は、提案者以外の回答者全員がOKすると{doors.isAiGm ? 'AI' : 'GM'}へ届きます
+        (OKできる人がいなければ自動で届きます)。質問で答えそのものを聞いても (例:「答えは犬ですか」)
+        質問として答えられ、勝ちにはなりません。当てるときは「解答」で出してください。
       </p>
     </section>
   );
 }
 
 /** 処理中の提案。承認待ちは枠が脈打ち、OKが付くとGMの列へ送られるように動き、取り消すと縮んで消える */
-function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors: DoorsView; active: ProposalView[]; isGm: boolean; act: Act }) {
+function ActiveList({
+  view,
+  doors,
+  active,
+  isGm,
+  act,
+}: {
+  view: RoomView;
+  doors: DoorsView;
+  active: ProposalView[];
+  isGm: boolean;
+  act: Act;
+}) {
   // AI GMは送信済みを古い順に1件ずつ答える。答えている1件は「回答待ち」で取り消せず、残りは順番待ち
   const sentLabel = (p: ProposalView): string => {
     if (!doors.isAiGm) return `→ ${STATUS_LABEL.sent}`;
@@ -266,7 +301,19 @@ function ActiveList({ view, doors, active, isGm, act }: { view: RoomView; doors:
   );
 }
 
-function LogList({ finished, showLie, canCorrect, liesLeft, act }: { finished: ProposalView[]; showLie: boolean; canCorrect: boolean; liesLeft: number; act: Act }) {
+function LogList({
+  finished,
+  showLie,
+  canCorrect,
+  liesLeft,
+  act,
+}: {
+  finished: ProposalView[];
+  showLie: boolean;
+  canCorrect: boolean;
+  liesLeft: number;
+  act: Act;
+}) {
   const [editingId, setEditingId] = useState('');
   return (
     <section className="doors-panel">

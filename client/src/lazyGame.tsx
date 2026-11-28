@@ -39,12 +39,19 @@ export class ChunkErrorBoundary extends Component<{ children: ReactNode }, { err
     if (!(error instanceof ChunkLoadError)) throw error;
     return (
       <div className="notice">
-        画面の読み込みに失敗しました。<button className="small" onClick={() => location.reload()}>再読込</button>
+        画面の読み込みに失敗しました。
+        <button className="small" onClick={() => location.reload()}>
+          再読込
+        </button>
       </div>
     );
   }
 }
 
 export function GameLoading() {
-  return <div className="notice" style={{ minHeight: 240 }}>読み込み中…</div>;
+  return (
+    <div className="notice" style={{ minHeight: 240 }}>
+      読み込み中…
+    </div>
+  );
 }
