@@ -16,6 +16,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 
+# 版の確認用。docker image inspect でコミットのハッシュを読む (server/のソースは実行用イメージに無い)
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.revision=$GIT_COMMIT
+
 USER node
 EXPOSE 47213
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

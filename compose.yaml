@@ -1,8 +1,13 @@
 services:
   ito:
-    build: .
+    build:
+      context: .
+      args:
+        # 版の確認用 (scripts/deploy.sh が渡す)
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     ports:
-      - "47213:47213"
+      # ホスト側のポート。公開用は HOST_PORT=47214。コンテナ内の待受 (47213) は変えない
+      - "${HOST_PORT:-47213}:47213"
     environment:
       # AIお題用の ASK API。値は compose.yaml と同じ場所の .env に書く (git 管理外)
       ASK_API_URL: ${ASK_API_URL:-}
