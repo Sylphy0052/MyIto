@@ -87,10 +87,13 @@ export function App() {
     };
     const onDisconnect = () => setConnected(false);
     const onShutdown = (_notice: ShutdownNotice) => setShutdownNotified(true);
+    // 同じ席へ別のソケットが入ったときの生存確認。すぐ応答して、サーバに閉じられないようにする
+    const onSeatProbe = (ack: () => void) => ack();
     socket.on('connect', rejoin);
     socket.on('disconnect', onDisconnect);
     socket.on('state', setView);
     socket.on('shutdown', onShutdown);
+    socket.on('seat:probe', onSeatProbe);
     if (socket.connected) void rejoin();
     return () => {
       generation += 1;
@@ -99,11 +102,12 @@ export function App() {
       socket.off('disconnect', onDisconnect);
       socket.off('state', setView);
       socket.off('shutdown', onShutdown);
+      socket.off('seat:probe', onSeatProbe);
     };
   }, [showError]);
 
-  const enterRoom = async (name: string, code: string | null) => {
-    const res = code ? await send('join', { code, name }) : await send('create', { name });
+  const enterRoom = async (name: string, code: string | null, key?: string) => {
+    const res = code ? await send('join', { code, name, key }) : await send('create', { name });
     if (!res.ok) return showError(res.error);
     saveSession({ code: res.code!, token: res.token!, name });
     setShutdownNotified(false);

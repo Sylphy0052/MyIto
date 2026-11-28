@@ -1,4 +1,5 @@
 import './loadEnv';
+import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
@@ -34,12 +35,16 @@ const CREATE_INTERVAL_MS = 30_000;
 const MAX_ROOMS = 200;
 // 接続元アドレスごとの同時接続数。同じ回線 (家庭・会議室) で数ルーム遊ぶ使い方は止めない
 const MAX_CONNECTIONS_PER_KEY = 20;
-// 接続元アドレスごとに、存在しないコードへの join を JOIN_FAIL_WINDOW_MS に JOIN_FAIL_MAX 種類まで受け、
-// 超えたら JOIN_BLOCK_MS の間 join を断る (コードの総当たり対策)。同じコードの失敗は1回と数えるので、
-// 再起動で消えたルームへ同じ回線の複数人が入り直しても詰まらない
-const JOIN_FAIL_WINDOW_MS = 60_000;
-const JOIN_FAIL_MAX = 10;
-const JOIN_BLOCK_MS = 60_000;
+// 存在しないコードへの join の失敗は、接続元アドレスごとのトークンバケットで制限する (コードの総当たり対策)。
+// 容量 JOIN_FAIL_BUCKET_MAX、JOIN_FAIL_REFILL_MS ごとに1回復するので、総当たりは毎分10件まで。
+// 枠を減らすのは異なるコードへの失敗だけで、同じコードは JOIN_FAIL_SAME_CODE_MS の間は1回と数える
+// (再起動で消えたルームへ同じ回線の複数人が入り直しても詰まらない)。
+// 枠が空の間は、ルームの有無によらず同じ応答で断る。その間の join は枠も回復も動かさない (時刻だけで回復する)
+const JOIN_FAIL_BUCKET_MAX = 10;
+const JOIN_FAIL_REFILL_MS = 6_000;
+const JOIN_FAIL_SAME_CODE_MS = 60_000;
+// 同じ席へtoken付きで入ったとき、同じ席の旧ソケットへ送る生存確認の待ち。応答が無ければ下位接続を閉じる
+const SEAT_PROBE_TIMEOUT_MS = 3_000;
 const EVENTS_PER_SECOND = 20;
 // 10の扉の提案・承認・取り消しは人の手の速さで足りるので、全体の上限より狭くする
 const DOORS_BURST_WINDOW_MS = 3_000;
@@ -132,25 +137,54 @@ type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents, Record<stri
 const lastCreateAt = new Map<string, number>();
 // 接続元ごとの同時接続数
 const connectionCounts = new Map<string, number>();
-// 接続元ごとの、存在しないコードへの join の記録
-interface JoinFailures {
-  windowStart: number;
-  codes: Set<string>;
-  blockedUntil: number;
+// 接続元ごとの、存在しないコードへの join 失敗のトークンバケット
+interface JoinBucket {
+  tokens: number;
+  /** tokens を最後に確定した時刻 (回復の端数を残すため、現在時刻ではなく回復の区切りで進める) */
+  refilledAt: number;
+  /** 枠を減らしたコードと、そのときの時刻 */
+  charged: Map<string, number>;
 }
-const joinFailures = new Map<string, JoinFailures>();
-function isJoinBlocked(key: string, now: number): boolean {
-  const f = joinFailures.get(key);
-  return f !== undefined && now < f.blockedUntil;
-}
-function recordJoinFailure(key: string, code: string, now: number): void {
-  let f = joinFailures.get(key);
-  if (!f || now - f.windowStart >= JOIN_FAIL_WINDOW_MS) {
-    f = { windowStart: now, codes: new Set(), blockedUntil: 0 };
-    joinFailures.set(key, f);
+const joinBuckets = new Map<string, JoinBucket>();
+/** 時刻だけでバケットを回復させる。join の中身や結果には依存しない */
+function refillJoinBucket(b: JoinBucket, now: number): void {
+  if (b.tokens >= JOIN_FAIL_BUCKET_MAX) {
+    b.refilledAt = now;
+    return;
   }
-  f.codes.add(code);
-  if (f.codes.size >= JOIN_FAIL_MAX) f.blockedUntil = now + JOIN_BLOCK_MS;
+  const gained = Math.floor((now - b.refilledAt) / JOIN_FAIL_REFILL_MS);
+  if (gained <= 0) return;
+  b.tokens = Math.min(JOIN_FAIL_BUCKET_MAX, b.tokens + gained);
+  b.refilledAt = b.tokens >= JOIN_FAIL_BUCKET_MAX ? now : b.refilledAt + gained * JOIN_FAIL_REFILL_MS;
+}
+/** 枠が空なら次に1回復するまでの秒数 (切り上げ)、空でなければ0 */
+function joinBlockedSec(key: string, now: number): number {
+  const b = joinBuckets.get(key);
+  if (!b) return 0;
+  refillJoinBucket(b, now);
+  if (b.tokens > 0) return 0;
+  return Math.max(1, Math.ceil((b.refilledAt + JOIN_FAIL_REFILL_MS - now) / 1000));
+}
+/** 枠が空でないときだけ呼ぶ。異なるコードへの失敗だけ枠を減らす */
+function recordJoinFailure(key: string, code: string, now: number): void {
+  let b = joinBuckets.get(key);
+  if (!b) {
+    b = { tokens: JOIN_FAIL_BUCKET_MAX, refilledAt: now, charged: new Map() };
+    joinBuckets.set(key, b);
+  }
+  refillJoinBucket(b, now);
+  for (const [c, at] of b.charged) if (now - at >= JOIN_FAIL_SAME_CODE_MS) b.charged.delete(c);
+  if (b.charged.has(code)) return;
+  b.charged.set(code, now);
+  if (b.tokens >= JOIN_FAIL_BUCKET_MAX) b.refilledAt = now;
+  b.tokens -= 1;
+}
+/** 合言葉の比較 (長さを揃えてから timingSafeEqual) */
+function isJoinKeyValid(room: Room, key: unknown): boolean {
+  if (typeof key !== 'string') return false;
+  const expected = Buffer.from(room.joinKey);
+  const given = Buffer.from(key);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
 // IPv6は端末ごとにアドレスを変えられるので、先頭64bit (/64) にまとめて数える
 function ipv6Prefix(address: string): string {
@@ -376,8 +410,26 @@ function enter(socket: GameSocket, room: Room, name: string, token: unknown, ack
     room.reassignHostIfAway();
     ack({ ok: true, code: room.code, token: player.token });
     broadcast(room);
+    probeOtherSeatSockets(socket, room.code, player.id);
   } catch (e) {
     ack({ ok: false, error: errorMessage(e) });
+  }
+}
+
+/**
+ * 席を引き継いだ新しいソケット以外の、同じ席のソケットへ生存確認を送り、応答しないものの下位接続を閉じる。
+ * 回線の切替などで切れたソケットがサーバに残ると、切断検知 (ping) まで接続元の枠を使い続けるため。
+ * 応答したソケット (生きている別タブ) は閉じない。disconnect(true) は使わない: io server disconnect は
+ * クライアントが自動再接続しないので、応答が遅れただけのタブが戻れなくなる。下位接続の切断なら再接続する
+ */
+function probeOtherSeatSockets(current: GameSocket, code: string, playerId: string): void {
+  for (const other of roomSockets(code)) {
+    if (other === current || other.data.code !== code || other.data.playerId !== playerId) continue;
+    other.timeout(SEAT_PROBE_TIMEOUT_MS).emit('seat:probe', (err: Error | null) => {
+      // discard=true: 未送信のパケット (この probe 自身) の送信完了を待たずに閉じる。
+      // 待つと、ポーリング中の死んだ接続では drain が来ず、閉じずに枠が残る
+      if (err) other.conn.close(true);
+    });
   }
 }
 
@@ -427,16 +479,25 @@ io.on('connection', (socket: GameSocket) => {
     enter(socket, room, name, undefined, ack);
   });
 
-  socket.on('join', (p: { code?: unknown; name?: unknown; token?: unknown }, ack: Ack) => {
+  socket.on('join', (p: { code?: unknown; name?: unknown; token?: unknown; key?: unknown }, ack: Ack) => {
     if (typeof ack !== 'function') return;
     if (isFlooding(socket)) return ack({ ok: false, error: '操作が多すぎます。少し待ってください', retry: true });
     const code = cleanText(p?.code, 4).toUpperCase();
     const room = rooms.get(code);
     const now = Date.now();
-    // 断っている間も、席の token を持つ再接続は通す
+    // 断っている間も、席の token を持つ再接続と、ルームの合言葉 (招待URLの k) が合う join は通す
     const isSeatHolder = room !== undefined && typeof p?.token === 'string' && room.players.some((pl) => pl.token === p.token);
-    if (!isSeatHolder && isJoinBlocked(limitKey, now)) {
-      return ack({ ok: false, error: 'ルームコードの入力が多すぎます。1分ほど待ってください', retry: true });
+    const hasKey = room !== undefined && isJoinKeyValid(room, p?.key);
+    if (!isSeatHolder && !hasKey) {
+      const blockedSec = joinBlockedSec(limitKey, now);
+      if (blockedSec > 0) {
+        return ack({
+          ok: false,
+          error: `ルームコードの入力が多すぎます。${blockedSec}秒ほど待ってください`,
+          retry: true,
+          retryAfterSec: blockedSec,
+        });
+      }
     }
     if (!room) {
       recordJoinFailure(limitKey, code, now);
@@ -636,8 +697,9 @@ setInterval(() => {
     }
   }
   for (const [key, at] of lastCreateAt) if (now - at >= CREATE_INTERVAL_MS) lastCreateAt.delete(key);
-  for (const [key, f] of joinFailures) {
-    if (now >= f.blockedUntil && now - f.windowStart >= JOIN_FAIL_WINDOW_MS) joinFailures.delete(key);
+  for (const [key, b] of joinBuckets) {
+    refillJoinBucket(b, now);
+    if (b.tokens >= JOIN_FAIL_BUCKET_MAX) joinBuckets.delete(key);
   }
 }, SWEEP_INTERVAL_MS);
 
