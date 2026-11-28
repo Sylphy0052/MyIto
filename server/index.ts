@@ -508,8 +508,7 @@ setInterval(() => {
   for (const [code, room] of rooms) {
     const idleMs = playedRooms.has(code) ? ROOM_IDLE_MS : UNPLAYED_ROOM_IDLE_MS;
     if (!room.hasConnected() && now - room.lastActiveAt > idleMs) {
-      room.stopReveal();
-      room.stopDoorsTimer();
+      room.dispose();
       rooms.delete(code);
       playedRooms.delete(code);
       releaseRoomAiSlots(code);

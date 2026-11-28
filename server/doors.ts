@@ -13,6 +13,9 @@ import {
   type QuestionReply,
 } from '../shared/types';
 import { GameError } from './errors';
+import { isAskConfigured } from './ai';
+import { randomDoorsTheme } from './topics';
+import type { GameEngine, Player, Room } from './game';
 
 /** 席の情報のうち、10の扉の進行に要るもの */
 export interface Seat {
@@ -787,5 +790,106 @@ export class DoorsRound {
       approvalsNeeded: needed.length,
       approvalsDone: needed.filter((s) => p.approverIds.includes(s.id)).length,
     };
+  }
+}
+
+/**
+ * 10の扉のエンジン。ラウンド (DoorsRound) と制限時間のタイマーを持つ。
+ * 設定・GMの抽選の記録・お題などルーム全体の状態は Room に置き、ここから読み書きする
+ */
+export class DoorsEngine implements GameEngine {
+  readonly mode = 'doors' as const;
+  /** 進行中のラウンド。ロビーでは null。itoのカード・列とは別に持つ */
+  round: DoorsRound | null = null;
+  /** 制限時間の締切。発火時に同じラウンドの質問の段階かを確かめるので、終了・中止の経路では止めない */
+  private timer: NodeJS.Timeout | null = null;
+
+  constructor(private readonly room: Room) {}
+
+  randomTopic(prev?: string): string {
+    return randomDoorsTheme(prev);
+  }
+
+  /** AIがGMなら、参加者全員が回答者になるので1人でも遊べる */
+  minPlayers(): number {
+    return this.room.doorsSettings.gmPick === 'ai' ? 1 : 2;
+  }
+
+  drawsGmInLobby(): boolean {
+    return this.room.doorsSettings.gmPick === 'random';
+  }
+
+  start(seated: readonly Player[]): void {
+    const room = this.room;
+    const { questions, maxLies } = room.doorsSettings;
+    if (room.doorsSettings.gmPick === 'ai') {
+      if (!isAskConfigured()) throw new GameError('ASK APIの設定が無いため、AIはGMを務められません');
+      // 答えは server/index.ts が AI に決めさせる。決まるまでは doors-setup のまま
+      this.round = new DoorsRound(AI_GM_ID, questions, maxLies, this.timeLimitMs(), this.turnLimitMs());
+      room.round += 1;
+      room.notice = 'AIがGMです';
+      room.phase = this.round.phase;
+      return;
+    }
+    const gm = this.pickGm(seated);
+    this.round = new DoorsRound(gm.id, questions, maxLies, this.timeLimitMs(), this.turnLimitMs());
+    room.lastGmId = gm.id;
+    room.nextGmId = '';
+    room.round += 1;
+    room.notice = `${gm.name} さんがGMです`;
+    room.phase = this.round.phase;
+  }
+
+  /** GMを決める。決められなければ GameError */
+  private pickGm(seated: readonly Player[]): Player {
+    const { gmPick, gmId } = this.room.doorsSettings;
+    if (gmPick === 'named') {
+      const gm = seated.find((p) => p.id === gmId);
+      if (!gm) throw new GameError('指名したGMが接続していません。GMを指名し直してください');
+      return gm;
+    }
+    this.room.refreshNextGm();
+    const gm = seated.find((p) => p.id === this.room.nextGmId);
+    if (!gm) throw new GameError('GMを抽選できませんでした');
+    return gm;
+  }
+
+  private timeLimitMs(): number {
+    return this.room.doorsSettings.timeLimitMin * DOORS_MINUTE_MS;
+  }
+
+  private turnLimitMs(): number {
+    return (this.room.doorsSettings.turnLimitSec / 10) * DOORS_TURN_UNIT_MS;
+  }
+
+  /** 質問・最終解答の段階の締切に合わせてタイマーを付け直す。前のタイマーは必ず消す */
+  syncTimer(): void {
+    this.stopTimer();
+    const round = this.round;
+    if (!round) return;
+    const deadline = round.nextDeadline();
+    if (deadline <= 0) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      // 別のラウンドに替わっていたり、質問・最終解答の段階でなくなっていたりしたら何もしない
+      if (this.round !== round || (round.phase !== 'doors-asking' && round.phase !== 'doors-final')) return;
+      if (!round.fireDeadline()) return this.syncTimer();
+      this.room.phase = round.phase;
+      this.syncTimer();
+      try {
+        this.room.onDoorsTimeUp?.();
+      } catch (e) {
+        console.error('doors time-up broadcast failed', e);
+      }
+    }, Math.max(1, deadline - Date.now()));
+  }
+
+  stopTimer(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+  }
+
+  dispose(): void {
+    this.stopTimer();
   }
 }
