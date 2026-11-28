@@ -11,7 +11,7 @@ const LONG = 'あ'.repeat(10) + 'い'.repeat(10) + 'う'.repeat(10) + 'え'.repe
   'か'.repeat(10) + 'き'.repeat(10) + 'く'.repeat(10) + 'け'.repeat(10) + 'こ'.repeat(10);
 const SHORT = 'ねこのなまえ十字';
 
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 const results = [];
 const check = (name, ok) => {
   results.push({ name, ok });
@@ -46,7 +46,17 @@ const metrics = (page) =>
       clamped: el.classList.contains('clamped'),
     };
   });
-const settle = (page) => page.waitForTimeout(600);
+// お題の出現アニメーション (opacity・移動・blur) が終わり、React・ResizeObserverの更新が落ち着くまで待つ
+const settle = async (page) => {
+  await page.waitForFunction(() => {
+    const el = document.querySelector('.topic-text');
+    if (!el) return false;
+    const style = getComputedStyle(el);
+    const isBlurGone = style.filter === 'none' || style.filter === 'blur(0px)';
+    return style.opacity === '1' && isBlurGone && (style.transform === 'none' || style.transform === 'matrix(1, 0, 0, 1, 0, 0)');
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+};
 
 async function openRoom(topic, mode) {
   const host = await newClient('ホスト');
