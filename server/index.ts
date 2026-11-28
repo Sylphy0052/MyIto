@@ -408,7 +408,10 @@ io.on('connection', (socket: GameSocket) => {
           room.topic = mode === 'doors' ? randomDoorsTheme(room.topic) : randomTopic(room.topic);
           room.topicSource = 'ai-fallback';
           room.topicCandidates = [];
-          room.notice = `AI生成に失敗したので、内蔵リストから${label}を出しました`;
+          room.notice =
+            e instanceof AiLimitError
+              ? `AIが混み合っているので、内蔵リストから${label}を出しました`
+              : `AI生成に失敗したので、内蔵リストから${label}を出しました`;
         })
         .finally(() => {
           room.aiBusy = false;
