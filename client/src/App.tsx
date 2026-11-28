@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { RoomView } from '../../shared/types';
+import type { RoomView, ShutdownNotice } from '../../shared/types';
 import { AnimatePresence, m, useIsPresent, type HTMLMotionProps } from 'motion/react';
 import { clearSession, loadSession, saveSession, send, socket } from './socket';
 import { Entry } from './Entry';
@@ -51,6 +51,8 @@ export function App() {
   // 同じ文言のエラーが続いてもトーストを出し直すための連番
   const [errorSeq, setErrorSeq] = useState(0);
   const [connected, setConnected] = useState(socket.connected);
+  // サーバの終了告知を受けたか。再接続しても消さず、次に入室したときに消す
+  const [shutdownNotified, setShutdownNotified] = useState(false);
   const errorTimer = useRef<number | undefined>(undefined);
   const [bgmVolume, setBgmVolume] = useBgmVolume();
   useBgm(bgmCategoryFor(view), bgmVolume);
@@ -84,9 +86,11 @@ export function App() {
       }
     };
     const onDisconnect = () => setConnected(false);
+    const onShutdown = (_notice: ShutdownNotice) => setShutdownNotified(true);
     socket.on('connect', rejoin);
     socket.on('disconnect', onDisconnect);
     socket.on('state', setView);
+    socket.on('shutdown', onShutdown);
     if (socket.connected) void rejoin();
     return () => {
       generation += 1;
@@ -94,6 +98,7 @@ export function App() {
       socket.off('connect', rejoin);
       socket.off('disconnect', onDisconnect);
       socket.off('state', setView);
+      socket.off('shutdown', onShutdown);
     };
   }, [showError]);
 
@@ -101,6 +106,7 @@ export function App() {
     const res = code ? await send('join', { code, name }) : await send('create', { name });
     if (!res.ok) return showError(res.error);
     saveSession({ code: res.code!, token: res.token!, name });
+    setShutdownNotified(false);
   };
 
   const leave = async () => {
@@ -132,6 +138,11 @@ export function App() {
           ))}
         </select>
       </label>
+      {shutdownNotified && (
+        <div className="shutdown-notice" role="alert">
+          サーバが再起動します。まもなく切断され、ルームは消えます。数分後にもう一度入室してください。
+        </div>
+      )}
       <AnimatePresence>
         {!connected && (
           <m.div
